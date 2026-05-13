@@ -8,7 +8,9 @@ from typing import Any
 
 import httpx
 
-from burnbox.exceptions import NoDomainsError, TokenError
+import asyncio
+
+from burnbox.exceptions import APIError, NoDomainsError, TokenError
 from burnbox.models import InboxMessage, MessagePreview
 from burnbox.providers.base import ProviderSession
 
@@ -107,8 +109,23 @@ class MailTmProvider:
         response = await self._client.request(method, url, json=body, headers=headers)
         if response.status_code == 204:
             return {}
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise APIError(
+                status_code=exc.response.status_code,
+                detail=exc.response.text,
+            ) from exc
         return response.json()
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
+    async def __aenter__(self) -> MailTmProvider:
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        await self.aclose()
 
     async def is_alive(self) -> bool:
         try:
@@ -190,19 +207,19 @@ class MailTmProvider:
         ]
         new = [p for p in previews if p.id not in seen_ids]
 
-        messages: list[InboxMessage] = []
-        for p in new:
+        async def _fetch_one(p: MessagePreview) -> InboxMessage:
             full = await self._request("GET", f"/messages/{p.id}")
             content = _normalize_content(
                 full.get("html"), full.get("text"), self._html_parser
             )
-            messages.append(InboxMessage(
+            return InboxMessage(
                 id=p.id,
                 sender=p.sender,
                 subject=p.subject,
                 content=content,
-            ))
-        return messages
+            )
+
+        return list(await asyncio.gather(*[_fetch_one(p) for p in new]))
 
     async def delete_account(self, account_id: str) -> bool:
         try:

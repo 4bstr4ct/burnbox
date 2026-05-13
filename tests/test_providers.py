@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from burnbox.providers.base import Provider, ProviderSession
 from burnbox.providers.mailtm import MailTmProvider
-from burnbox.exceptions import NoDomainsError
+from burnbox.exceptions import NoDomainsError, TokenError
 
 
 @pytest.fixture
@@ -127,3 +127,74 @@ class TestMailTmProvider:
         assert len(messages) == 1
         assert messages[0].sender == "sender@test.com"
         assert "1234" in messages[0].content
+
+    @pytest.mark.asyncio
+    async def test_fetch_messages_filters_seen(self, mock_async_client):
+        list_resp = MagicMock()
+        list_resp.json.return_value = {
+            "hydra:member": [
+                {"id": "msg1", "from": {"address": "a@b.c"}, "subject": "Old"},
+                {"id": "msg2", "from": {"address": "c@d.c"}, "subject": "New"},
+            ]
+        }
+        list_resp.raise_for_status = MagicMock()
+
+        detail_resp = MagicMock()
+        detail_resp.json.return_value = {
+            "id": "msg2", "from": {"address": "c@d.c"},
+            "subject": "New", "html": None, "text": "New message",
+        }
+        detail_resp.raise_for_status = MagicMock()
+
+        mock_async_client.request = AsyncMock(side_effect=[list_resp, detail_resp])
+        p = MailTmProvider(client=mock_async_client)
+        p._token = "tok456"
+        messages = await p.fetch_messages(seen_ids={"msg1"})
+        assert len(messages) == 1
+        assert messages[0].id == "msg2"
+
+    @pytest.mark.asyncio
+    async def test_login(self, mock_async_client):
+        token_resp = MagicMock()
+        token_resp.json.return_value = {"token": "logtok"}
+        token_resp.raise_for_status = MagicMock()
+
+        me_resp = MagicMock()
+        me_resp.json.return_value = {"id": "me123"}
+        me_resp.raise_for_status = MagicMock()
+
+        mock_async_client.request = AsyncMock(side_effect=[token_resp, me_resp])
+        p = MailTmProvider(client=mock_async_client)
+        session = await p.login("user@example.com", "pass123")
+        assert session.address == "user@example.com"
+        assert session.account_id == "me123"
+        assert session.token == "logtok"
+
+    @pytest.mark.asyncio
+    async def test_login_token_error(self, mock_async_client):
+        token_resp = MagicMock()
+        token_resp.json.return_value = {}
+        token_resp.raise_for_status = MagicMock()
+        mock_async_client.request = AsyncMock(return_value=token_resp)
+        p = MailTmProvider(client=mock_async_client)
+        with pytest.raises(TokenError):
+            await p.login("user@example.com", "pass123")
+
+    @pytest.mark.asyncio
+    async def test_delete_account_failure(self, mock_async_client):
+        mock_async_client.request = AsyncMock(side_effect=Exception("network error"))
+        p = MailTmProvider(client=mock_async_client)
+        result = await p.delete_account("acc123")
+        assert result is False
+
+    def test_provider_protocol_compliance(self):
+        p = MailTmProvider()
+        assert isinstance(p, Provider)
+
+    @pytest.mark.asyncio
+    async def test_context_manager(self, mock_async_client):
+        mock_async_client.aclose = AsyncMock()
+        p = MailTmProvider(client=mock_async_client)
+        async with p:
+            pass
+        mock_async_client.aclose.assert_called_once()
