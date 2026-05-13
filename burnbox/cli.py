@@ -87,18 +87,12 @@ def _build_registry(config: AppConfig) -> ProviderRegistry:
     return registry
 
 
-def _build_client(config: AppConfig) -> tuple[BurnBoxClient, Provider]:
+async def _select_provider(config: AppConfig) -> Provider:
     registry = _build_registry(config)
-    preferred = config.provider_default
-
-    provider = asyncio.run(select_provider(registry.all(), preferred=preferred))
+    provider = await select_provider(registry.all(), preferred=config.provider_default)
     if not provider:
-        console.print("[bold red]No available providers. Check your network.[/bold red]")
-        raise typer.Exit(1)
-
-    store = SessionStore()
-    client = BurnBoxClient(provider=provider, session_store=store, config=config)
-    return client, provider
+        raise BurnBoxError("No available providers. Check your network.")
+    return provider
 
 
 async def _poll_loop(client: BurnBoxClient, config: AppConfig) -> None:
@@ -121,31 +115,6 @@ async def _poll_loop(client: BurnBoxClient, config: AppConfig) -> None:
                 console.print(f"[red]Error: {exc}[/red]")
 
             await asyncio.sleep(config.poll_interval)
-
-
-async def _register_and_poll(client: BurnBoxClient, config: AppConfig, keep: bool) -> None:
-    console.print(Panel.fit("[bold red]burnbox[/bold red] - Temp Email CLI", style="red"))
-    try:
-        session = await client.register()
-        console.print()
-        console.print(f"  [bold]Address:[/bold]  [green]{session.address}[/green]")
-        if config.copy_address:
-            console.print("[dim]  Address copied to clipboard[/dim]")
-        console.print("[dim]  Listening for drops... (Ctrl+C to exit)[/dim]\n")
-        await _poll_loop(client, config)
-    except KeyboardInterrupt:
-        pass
-    except BurnBoxError as exc:
-        console.print(f"[bold red]Critical failure: {exc}[/bold red]")
-        return
-
-    if not keep:
-        if await client.burn():
-            console.print("[dim]Burned.[/dim]")
-        else:
-            console.print("[bold red]Failed to burn account.[/bold red]")
-    else:
-        console.print("[dim]Kept alive. Resume with: [bold]burnbox resume[/bold][/dim]")
 
 
 @app.callback()
@@ -212,8 +181,36 @@ def main(
             copy_code=config.copy_code,
         )
 
-    client, _ = _build_client(config)
-    asyncio.run(_register_and_poll(client, config, keep))
+    asyncio.run(_run(config, keep))
+
+
+async def _run(config: AppConfig, keep: bool) -> None:
+    provider = await _select_provider(config)
+    store = SessionStore()
+    client = BurnBoxClient(provider=provider, session_store=store, config=config)
+
+    console.print(Panel.fit("[bold red]burnbox[/bold red] - Temp Email CLI", style="red"))
+    try:
+        session = await client.register()
+        console.print()
+        console.print(f"  [bold]Address:[/bold]  [green]{session.address}[/green]")
+        if config.copy_address:
+            console.print("[dim]  Address copied to clipboard[/dim]")
+        console.print("[dim]  Listening for drops... (Ctrl+C to exit)[/dim]\n")
+        await _poll_loop(client, config)
+    except KeyboardInterrupt:
+        pass
+    except BurnBoxError as exc:
+        console.print(f"[bold red]Critical failure: {exc}[/bold red]")
+        return
+
+    if not keep:
+        if await client.burn():
+            console.print("[dim]Burned.[/dim]")
+        else:
+            console.print("[bold red]Failed to burn account.[/bold red]")
+    else:
+        console.print("[dim]Kept alive. Resume with: [bold]burnbox resume[/bold][/dim]")
 
 
 @app.command()
@@ -239,15 +236,18 @@ def address(
             copy_code=config.copy_code,
         )
 
-    client, _ = _build_client(config)
+    asyncio.run(_run_address(config))
 
-    async def _gen():
-        session = await client.register()
-        console.print(f"[green]{session.address}[/green]")
-        if config.copy_address:
-            console.print("[dim]Address copied to clipboard.[/dim]")
 
-    asyncio.run(_gen())
+async def _run_address(config: AppConfig) -> None:
+    provider = await _select_provider(config)
+    store = SessionStore()
+    client = BurnBoxClient(provider=provider, session_store=store, config=config)
+
+    session = await client.register()
+    console.print(f"[green]{session.address}[/green]")
+    if config.copy_address:
+        console.print("[dim]Address copied to clipboard.[/dim]")
 
 
 @app.command()
@@ -259,30 +259,33 @@ def resume(
     keep = obj.get("keep", False)
     config = load_config()
 
-    client, _ = _build_client(config)
+    asyncio.run(_run_resume(config, keep))
 
-    async def _resume():
-        try:
-            session = await client.resume()
-            console.print(f"  [bold]Address:[/bold]  [green]{session.address}[/green]")
-            console.print("[dim]  Listening for drops... (Ctrl+C to exit)[/dim]\n")
-            await _poll_loop(client, config)
-        except KeyboardInterrupt:
-            pass
-        except SessionError as exc:
-            console.print(f"[bold red]{exc}[/bold red]")
-            return
-        except BurnBoxError as exc:
-            console.print(f"[bold red]Critical failure: {exc}[/bold red]")
-            return
 
-        if not keep:
-            if await client.burn():
-                console.print("[dim]Burned.[/dim]")
-        else:
-            console.print("[dim]Kept alive. Resume with: [bold]burnbox resume[/bold][/dim]")
+async def _run_resume(config: AppConfig, keep: bool) -> None:
+    provider = await _select_provider(config)
+    store = SessionStore()
+    client = BurnBoxClient(provider=provider, session_store=store, config=config)
 
-    asyncio.run(_resume())
+    try:
+        session = await client.resume()
+        console.print(f"  [bold]Address:[/bold]  [green]{session.address}[/green]")
+        console.print("[dim]  Listening for drops... (Ctrl+C to exit)[/dim]\n")
+        await _poll_loop(client, config)
+    except KeyboardInterrupt:
+        pass
+    except SessionError as exc:
+        console.print(f"[bold red]{exc}[/bold red]")
+        return
+    except BurnBoxError as exc:
+        console.print(f"[bold red]Critical failure: {exc}[/bold red]")
+        return
+
+    if not keep:
+        if await client.burn():
+            console.print("[dim]Burned.[/dim]")
+    else:
+        console.print("[dim]Kept alive. Resume with: [bold]burnbox resume[/bold][/dim]")
 
 
 if __name__ == "__main__":

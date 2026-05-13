@@ -1,12 +1,10 @@
 import pytest
 from typer.testing import CliRunner
-from unittest.mock import AsyncMock, patch, MagicMock
-from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
-from burnbox.models import Session, InboxMessage
+from burnbox.models import Session
 from burnbox.config import AppConfig
-from burnbox.session import SessionStore
-from burnbox.client import BurnBoxClient
+from burnbox.exceptions import SessionError
 from burnbox.cli import app
 
 
@@ -35,12 +33,9 @@ class TestVersion:
 
 
 class TestAddressCommand:
-    @patch("burnbox.cli._build_client")
-    def test_address_command(self, mock_build, mock_provider, tmp_path):
-        store = SessionStore(dir=tmp_path)
-        config = AppConfig(copy_address=False)
-        client = BurnBoxClient(provider=mock_provider, session_store=store, config=config)
-        mock_build.return_value = (client, mock_provider)
+    @patch("burnbox.cli._select_provider")
+    def test_address_command(self, mock_select, mock_provider):
+        mock_select.return_value = mock_provider
 
         result = runner.invoke(app, ["address"])
         assert result.exit_code == 0
@@ -48,12 +43,13 @@ class TestAddressCommand:
 
 
 class TestResumeCommand:
-    @patch("burnbox.cli._build_client")
-    def test_resume_no_session(self, mock_build, mock_provider, tmp_path):
-        store = SessionStore(dir=tmp_path)
-        config = AppConfig()
-        client = BurnBoxClient(provider=mock_provider, session_store=store, config=config)
-        mock_build.return_value = (client, mock_provider)
+    @patch("burnbox.cli.BurnBoxClient")
+    @patch("burnbox.cli._select_provider")
+    def test_resume_no_session(self, mock_select, mock_client_cls, mock_provider):
+        mock_select.return_value = mock_provider
+        mock_client = AsyncMock()
+        mock_client.resume.side_effect = SessionError("No saved session found. Run 'burnbox' first.")
+        mock_client_cls.return_value = mock_client
 
         result = runner.invoke(app, ["resume"])
-        assert "No saved session" in result.stdout or result.exit_code != 0
+        assert "No saved session" in result.stdout
