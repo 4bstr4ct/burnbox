@@ -76,13 +76,15 @@ class TestSelectProvider:
         assert result.name == "alive"
 
     @pytest.mark.asyncio
-    async def test_select_none_if_all_dead(self):
+    async def test_all_dead_falls_back_to_first(self):
         providers = [
             FakeProvider("dead1", alive=False),
             FakeProvider("dead2", alive=False),
         ]
         result = await select_provider(providers)
-        assert result is None
+        # Health checks are unreliable — fallback to first provider
+        assert result is not None
+        assert result.name == "dead1"
 
     @pytest.mark.asyncio
     async def test_select_specific_provider(self):

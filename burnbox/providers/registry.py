@@ -56,6 +56,9 @@ async def select_provider(
     providers: Sequence[Provider],
     preferred: str | None = None,
 ) -> Provider | None:
+    if not providers:
+        return None
+
     if preferred:
         for p in providers:
             if p.name == preferred:
@@ -75,4 +78,7 @@ async def select_provider(
             logger.info("Selected provider: %s", provider.name)
             return provider
 
-    return None
+    # Fallback: health checks are unreliable — try the first provider anyway.
+    # Let the actual operation fail with a meaningful error if the provider is truly down.
+    logger.warning("All health checks failed, falling back to %s", providers[0].name)
+    return providers[0]
