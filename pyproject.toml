@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "burnbox"
+version = "1.0.0"
+description = "Temporary email that burns after reading"
+requires-python = ">=3.10"
+dependencies = [
+    "httpx",
+    "html2text",
+    "rich",
+    "typer",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[project.scripts]
+burnbox = "burnbox.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["burnbox*"]
