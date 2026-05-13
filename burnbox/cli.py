@@ -84,6 +84,7 @@ def _build_registry(config: AppConfig) -> ProviderRegistry:
         registry.register(MailTmProvider())
     registry.register(MailGwProvider())
     registry.register(OneSecMailProvider())
+    registry.discover_plugins()
     return registry
 
 
@@ -93,6 +94,12 @@ async def _select_provider(config: AppConfig) -> Provider:
     if not provider:
         raise BurnBoxError("No available providers. Check your network.")
     return provider
+
+
+def _get_provider_by_name(config: AppConfig, name: str) -> Provider | None:
+    """Get a provider by name from registry without health check."""
+    registry = _build_registry(config)
+    return registry.get(name)
 
 
 async def _poll_loop(client: BurnBoxClient, config: AppConfig) -> None:
@@ -263,8 +270,19 @@ def resume(
 
 
 async def _run_resume(config: AppConfig, keep: bool) -> None:
-    provider = await _select_provider(config)
     store = SessionStore()
+    saved = store.load()
+    if not saved:
+        console.print("[bold red]No saved session found. Run 'burnbox' first.[/bold red]")
+        return
+
+    # Use the provider that created the session, not a random alive one
+    provider = _get_provider_by_name(config, saved.provider_name)
+    if not provider:
+        console.print(f"[bold red]Unknown provider '{saved.provider_name}' in saved session.[/bold red]")
+        store.delete()
+        return
+
     client = BurnBoxClient(provider=provider, session_store=store, config=config)
 
     try:

@@ -1,26 +1,27 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 import string
 import time
 from typing import Any
 
+import html2text
 import httpx
-
-import asyncio
 
 from burnbox.exceptions import APIError, NoDomainsError, TokenError
 from burnbox.models import InboxMessage, MessagePreview
 from burnbox.providers.base import ProviderSession
-
-import html2text
 
 logger = logging.getLogger(__name__)
 
 _SPECIAL = "!@#$%&*"
 _PASSWORD_LEN = 16
 _MIN_PASSWORD_LEN = 8
+_RETRY_MAX = 3
+_RETRY_BASE_DELAY = 1.0
+_RETRY_MAX_DELAY = 30.0
 
 
 def _generate_secure_str(length: int = 10) -> str:
@@ -106,17 +107,32 @@ class MailTmProvider:
         headers: dict[str, str] = {}
         if auth and self._token:
             headers["Authorization"] = f"Bearer {self._token}"
-        response = await self._client.request(method, url, json=body, headers=headers)
-        if response.status_code == 204:
-            return {}
-        try:
-            response.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            raise APIError(
-                status_code=exc.response.status_code,
-                detail=exc.response.text,
-            ) from exc
-        return response.json()
+
+        for attempt in range(1, _RETRY_MAX + 1):
+            try:
+                response = await self._client.request(method, url, json=body, headers=headers)
+                if response.status_code == 204:
+                    return {}
+                try:
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    raise APIError(
+                        status_code=exc.response.status_code,
+                        detail=exc.response.text,
+                    ) from exc
+                return response.json()
+            except APIError:
+                raise
+            except (httpx.ConnectError, httpx.TimeoutException) as exc:
+                if attempt < _RETRY_MAX:
+                    delay = min(_RETRY_BASE_DELAY * (2 ** (attempt - 1)), _RETRY_MAX_DELAY)
+                    logger.warning(
+                        "Request failed (attempt %d/%d), retrying in %.1fs: %s",
+                        attempt, _RETRY_MAX, delay, exc,
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    raise APIError(status_code=0, detail=str(exc)) from exc
 
     async def aclose(self) -> None:
         await self._client.aclose()

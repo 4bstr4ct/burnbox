@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from importlib.metadata import entry_points
 from typing import Sequence
 
 from burnbox.providers.base import Provider
 
 logger = logging.getLogger(__name__)
+
+_ENTRY_POINT_GROUP = "burnbox.providers"
 
 
 class ProviderRegistry:
@@ -24,6 +27,29 @@ class ProviderRegistry:
 
     def all(self) -> list[Provider]:
         return list(self._providers.values())
+
+    def discover_plugins(self) -> None:
+        """Discover and register provider plugins via entry points."""
+        eps = entry_points()
+        # Python 3.12+ returns a SelectableGroups, <3.12 returns dict
+        if hasattr(eps, "select"):
+            group_eps = eps.select(group=_ENTRY_POINT_GROUP)
+        else:
+            group_eps = eps.get(_ENTRY_POINT_GROUP, [])
+
+        for ep in group_eps:
+            try:
+                cls = ep.load()
+                provider = cls()
+                if isinstance(provider, Provider):
+                    self.register(provider)
+                    logger.info("Discovered plugin provider: %s", provider.name)
+                else:
+                    logger.warning(
+                        "Plugin %s does not implement Provider protocol, skipping", ep.name
+                    )
+            except Exception as exc:
+                logger.warning("Failed to load plugin %s: %s", ep.name, exc)
 
 
 async def select_provider(
