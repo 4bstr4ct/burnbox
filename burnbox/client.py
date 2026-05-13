@@ -6,7 +6,7 @@ from burnbox.config import AppConfig
 from burnbox.detectors import copy_to_clipboard
 from burnbox.exceptions import BurnBoxError, SessionError
 from burnbox.models import InboxMessage, Session
-from burnbox.providers.base import Provider
+from burnbox.providers.base import Provider, ProviderSession
 from burnbox.session import SessionStore
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,14 @@ class BurnBoxClient:
         self._session: Session | None = None
 
     async def register(self) -> Session:
-        session = await self._provider.register()
+        ps: ProviderSession = await self._provider.register()
+        session = Session(
+            address=ps.address,
+            account_id=ps.account_id,
+            token=ps.token,
+            provider_name=ps.provider_name,
+            created_at=ps.created_at,
+        )
         self._session = session
         self._store.save(session)
         if self._config.copy_address:
