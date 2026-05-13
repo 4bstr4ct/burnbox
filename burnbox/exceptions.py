@@ -21,3 +21,11 @@ class TokenError(BurnBoxError):
 
 class AuthExpiredError(BurnBoxError):
     """Raised when the auth token has expired (401)."""
+
+
+class SessionError(BurnBoxError):
+    """Raised when session operations fail."""
+
+
+class ProviderError(BurnBoxError):
+    """Raised when provider operations fail."""

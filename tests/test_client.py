@@ -1,135 +1,156 @@
-from unittest.mock import MagicMock, patch
-
 import pytest
+from unittest.mock import AsyncMock, patch
+from pathlib import Path
 
-from burnbox.account import AccountService
-from burnbox.api import APIClient
-from burnbox.client import BurnBoxClient, _save_session, _load_session, _delete_session
-from burnbox.exceptions import BurnBoxError
-from burnbox.messages import MessageService
-from burnbox.models import InboxMessage
-
-
-def _make_client(
-    account_return=None,
-    login_return=None,
-    delete_side_effect=None,
-    fetch_new_return=None,
-):
-    api = MagicMock(spec=APIClient)
-    account = MagicMock(spec=AccountService)
-    account.account_id = None
-    if account_return is not None:
-        account.register = MagicMock(return_value=account_return)
-    if login_return is not None:
-        account.login = MagicMock(return_value=login_return)
-    if delete_side_effect is not None:
-        account.delete = MagicMock(side_effect=delete_side_effect)
-    else:
-        account.delete = MagicMock()
-
-    messages = MagicMock(spec=MessageService)
-    if fetch_new_return is not None:
-        messages.fetch_new = MagicMock(return_value=fetch_new_return)
-
-    client = BurnBoxClient(api=api)
-    client._account = account
-    client._messages = messages
-    return client, account, messages, api
+from burnbox.client import BurnBoxClient
+from burnbox.config import AppConfig
+from burnbox.exceptions import SessionError
+from burnbox.models import Session, InboxMessage
+from burnbox.session import SessionStore
 
 
-class TestBurnBoxClientRegister:
-    def test_register_sets_fields_and_saves(self, tmp_path, monkeypatch):
-        session_dir = tmp_path / "burnbox"
-        session_file = session_dir / "session.json"
-        monkeypatch.setattr("burnbox.client.SESSION_DIR", session_dir)
-        monkeypatch.setattr("burnbox.client.SESSION_FILE", session_file)
+@pytest.fixture
+def mock_provider():
+    p = AsyncMock()
+    p.name = "mailtm"
+    p.is_alive.return_value = True
+    p.register.return_value = Session(
+        address="test@example.com", account_id="1",
+        token="tok", provider_name="mailtm", created_at=0.0,
+    )
+    p.fetch_messages.return_value = []
+    p.delete_account.return_value = True
+    return p
 
-        client, account, _, _ = _make_client(
-            account_return=("user@x.com", "pw123", "acc_1")
+
+@pytest.fixture
+def mock_session_store(tmp_path):
+    return SessionStore(dir=tmp_path)
+
+
+class TestBurnBoxClient:
+    @pytest.mark.asyncio
+    async def test_register(self, mock_provider, mock_session_store):
+        client = BurnBoxClient(
+            provider=mock_provider,
+            session_store=mock_session_store,
+            config=AppConfig(),
         )
-        result = client.register()
-        assert result == "user@x.com"
-        assert client.address == "user@x.com"
-        assert client.password == "pw123"
-        assert client.account_id == "acc_1"
-        assert session_file.exists()
+        session = await client.register()
+        assert session.address == "test@example.com"
+        mock_provider.register.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_register_saves_session(self, mock_provider, mock_session_store):
+        client = BurnBoxClient(
+            provider=mock_provider,
+            session_store=mock_session_store,
+            config=AppConfig(copy_address=False),
+        )
+        await client.register()
+        loaded = mock_session_store.load()
+        assert loaded is not None
+        assert loaded.address == "test@example.com"
 
-class TestBurnBoxClientLogin:
-    def test_login_sets_fields(self, tmp_path, monkeypatch):
-        session_dir = tmp_path / "burnbox"
-        session_file = session_dir / "session.json"
-        monkeypatch.setattr("burnbox.client.SESSION_DIR", session_dir)
-        monkeypatch.setattr("burnbox.client.SESSION_FILE", session_file)
+    @pytest.mark.asyncio
+    async def test_register_copies_address(self, mock_provider, mock_session_store):
+        with patch("burnbox.client.copy_to_clipboard") as mock_copy:
+            client = BurnBoxClient(
+                provider=mock_provider,
+                session_store=mock_session_store,
+                config=AppConfig(copy_address=True),
+            )
+            await client.register()
+            mock_copy.assert_called_once_with("test@example.com")
 
-        client, account, _, _ = _make_client(login_return=("user@x.com", "acc_1"))
-        result = client.login("user@x.com", "pw")
-        assert result == "user@x.com"
-        assert client.password == "pw"
-        assert client.account_id == "acc_1"
+    @pytest.mark.asyncio
+    async def test_register_no_copy(self, mock_provider, mock_session_store):
+        with patch("burnbox.client.copy_to_clipboard") as mock_copy:
+            client = BurnBoxClient(
+                provider=mock_provider,
+                session_store=mock_session_store,
+                config=AppConfig(copy_address=False),
+            )
+            await client.register()
+            mock_copy.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_fetch_new(self, mock_provider, mock_session_store):
+        msg = InboxMessage(id="1", sender="a@b.c", subject="Hi", content="Code: 1234")
+        mock_provider.fetch_messages.return_value = [msg]
+        client = BurnBoxClient(
+            provider=mock_provider,
+            session_store=mock_session_store,
+            config=AppConfig(),
+        )
+        await client.register()
+        new = await client.fetch_new(seen_ids=set())
+        assert len(new) == 1
 
-class TestBurnBoxClientResume:
-    def test_resume_from_session(self, tmp_path, monkeypatch):
-        session_dir = tmp_path / "burnbox"
-        session_file = session_dir / "session.json"
-        monkeypatch.setattr("burnbox.client.SESSION_DIR", session_dir)
-        monkeypatch.setattr("burnbox.client.SESSION_FILE", session_file)
+    @pytest.mark.asyncio
+    async def test_burn(self, mock_provider, mock_session_store):
+        client = BurnBoxClient(
+            provider=mock_provider,
+            session_store=mock_session_store,
+            config=AppConfig(),
+        )
+        await client.register()
+        result = await client.burn()
+        assert result is True
+        assert mock_session_store.load() is None
 
-        _save_session("user@x.com", "pw", "acc_5")
+    @pytest.mark.asyncio
+    async def test_burn_without_session(self, mock_provider, mock_session_store):
+        client = BurnBoxClient(
+            provider=mock_provider,
+            session_store=mock_session_store,
+            config=AppConfig(),
+        )
+        result = await client.burn()
+        assert result is False
 
-        client, account, _, _ = _make_client(login_return=("user@x.com", "acc_5"))
-        result = client.resume()
-        assert result == "user@x.com"
-        assert client.account_id == "acc_5"
-        assert account.account_id == "acc_5"
+    @pytest.mark.asyncio
+    async def test_resume_with_valid_token(self, mock_provider, mock_session_store):
+        session = Session(
+            address="test@example.com", account_id="1",
+            token="tok", provider_name="mailtm", created_at=0.0,
+        )
+        mock_session_store.save(session)
+        mock_provider.fetch_messages.return_value = []
 
-    def test_resume_no_session_raises(self, tmp_path, monkeypatch):
-        session_file = tmp_path / "nope.json"
-        monkeypatch.setattr("burnbox.client.SESSION_FILE", session_file)
-        monkeypatch.setattr("burnbox.client.SESSION_DIR", tmp_path)
+        client = BurnBoxClient(
+            provider=mock_provider,
+            session_store=mock_session_store,
+            config=AppConfig(),
+        )
+        result = await client.resume()
+        assert result.address == "test@example.com"
 
-        client, _, _, _ = _make_client(login_return=("user@x.com", "acc_x"))
-        with pytest.raises(BurnBoxError, match="No saved session"):
-            client.resume()
+    @pytest.mark.asyncio
+    async def test_resume_no_session(self, mock_provider, mock_session_store):
+        client = BurnBoxClient(
+            provider=mock_provider,
+            session_store=mock_session_store,
+            config=AppConfig(),
+        )
+        with pytest.raises(SessionError, match="No saved session"):
+            await client.resume()
 
+    @pytest.mark.asyncio
+    async def test_resume_expired_session(self, mock_provider, mock_session_store):
+        session = Session(
+            address="test@example.com", account_id="1",
+            token="tok", provider_name="mailtm", created_at=0.0,
+        )
+        mock_session_store.save(session)
+        mock_provider.fetch_messages.side_effect = Exception("401 Unauthorized")
 
-class TestBurnBoxClientBurn:
-    def test_burn_success(self, tmp_path, monkeypatch):
-        session_dir = tmp_path / "burnbox"
-        session_file = session_dir / "session.json"
-        monkeypatch.setattr("burnbox.client.SESSION_DIR", session_dir)
-        monkeypatch.setattr("burnbox.client.SESSION_FILE", session_file)
-
-        client, account, _, _ = _make_client()
-        account.account_id = "acc_1"
-        assert client.burn() is True
-        account.delete.assert_called_once()
-
-    def test_burn_no_account_id_returns_false(self):
-        client, account, _, _ = _make_client()
-        account.account_id = None
-        assert client.burn() is False
-        account.delete.assert_not_called()
-
-    def test_burn_error_returns_false(self):
-        client, account, _, _ = _make_client(delete_side_effect=BurnBoxError("fail"))
-        account.account_id = "acc_1"
-        assert client.burn() is False
-
-
-class TestBurnBoxClientFetchNewMessages:
-    def test_delegates_to_message_service(self):
-        msg = InboxMessage(id="1", sender="a@b", subject="Hi", content="body")
-        client, _, messages, _ = _make_client(fetch_new_return=[msg])
-        result = client.fetch_new_messages(seen_ids=set())
-        assert result == [msg]
-
-
-class TestBurnBoxClientContextManager:
-    def test_context_manager_closes(self):
-        client, _, _, api = _make_client()
-        with client:
-            pass
-        api.close.assert_called_once()
+        client = BurnBoxClient(
+            provider=mock_provider,
+            session_store=mock_session_store,
+            config=AppConfig(),
+        )
+        with pytest.raises(SessionError, match="Session expired"):
+            await client.resume()
+        # Session should be deleted
+        assert mock_session_store.load() is None
