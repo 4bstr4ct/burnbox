@@ -12,6 +12,8 @@ dependencies = [
     "html2text",
     "rich",
     "typer",
+    "pyperclip",
+    "tomli; python_version < '3.11'",
 ]
 
 [project.optional-dependencies]
