@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "burnbox"
-version = "1.0.0"
+version = "2.0.0"
 description = "Temporary email that burns after reading"
 requires-python = ">=3.10"
 dependencies = [
@@ -27,6 +27,3 @@ asyncio_mode = "auto"
 
 [project.scripts]
 burnbox = "burnbox.cli:app"
-
-[tool.setuptools.packages.find]
-include = ["burnbox*"]

@@ -1,28 +1,30 @@
-from burnbox.account import AccountService
-from burnbox.api import APIClient
 from burnbox.client import BurnBoxClient
-from burnbox.config import Config
+from burnbox.config import AppConfig, load_config
 from burnbox.exceptions import (
     APIError,
     AuthExpiredError,
     BurnBoxError,
     NoDomainsError,
+    ProviderError,
+    SessionError,
     TokenError,
 )
-from burnbox.messages import MessageService
-from burnbox.models import InboxMessage, MessagePreview
+from burnbox.models import InboxMessage, MessagePreview, Session
+
+__version__ = "2.0.0"
 
 __all__ = [
-    "APIClient",
-    "AccountService",
     "BurnBoxClient",
+    "AppConfig",
+    "load_config",
     "BurnBoxError",
-    "Config",
+    "Session",
     "InboxMessage",
     "MessagePreview",
-    "MessageService",
     "APIError",
     "NoDomainsError",
+    "ProviderError",
+    "SessionError",
     "TokenError",
     "AuthExpiredError",
 ]
