@@ -198,3 +198,61 @@ class TestMailTmProvider:
         async with p:
             pass
         mock_async_client.aclose.assert_called_once()
+
+
+from burnbox.providers.mailgw import MailGwProvider
+from burnbox.providers.onesecmail import OneSecMailProvider
+
+
+class TestMailGwProvider:
+    def test_name(self):
+        p = MailGwProvider()
+        assert p.name == "mailgw"
+
+    def test_supports_custom_url(self):
+        p = MailGwProvider()
+        assert p.supports_custom_url is True
+
+    def test_default_url(self):
+        p = MailGwProvider()
+        assert p._base_url == "https://api.mail.gw"
+
+    @pytest.mark.asyncio
+    async def test_is_alive_success(self, mock_async_client):
+        mock_async_client.get.return_value = MagicMock(status_code=200)
+        p = MailGwProvider(client=mock_async_client)
+        assert await p.is_alive() is True
+
+
+class TestOneSecMailProvider:
+    def test_name(self):
+        p = OneSecMailProvider()
+        assert p.name == "1secmail"
+
+    def test_supports_custom_url(self):
+        p = OneSecMailProvider()
+        assert p.supports_custom_url is False
+
+    @pytest.mark.asyncio
+    async def test_is_alive(self, mock_async_client):
+        mock_async_client.get.return_value = MagicMock(status_code=200)
+        p = OneSecMailProvider(client=mock_async_client)
+        assert await p.is_alive() is True
+
+    @pytest.mark.asyncio
+    async def test_register(self, mock_async_client):
+        gen_resp = MagicMock()
+        gen_resp.json.return_value = ["1secmail.com", "1secmail.org"]
+        gen_resp.raise_for_status = MagicMock()
+        mock_async_client.get = AsyncMock(return_value=gen_resp)
+        p = OneSecMailProvider(client=mock_async_client)
+        session = await p.register()
+        assert session.address.endswith("@1secmail.com") or session.address.endswith("@1secmail.org")
+        assert session.provider_name == "1secmail"
+        assert session.token == ""
+
+    @pytest.mark.asyncio
+    async def test_delete_always_true(self, mock_async_client):
+        p = OneSecMailProvider(client=mock_async_client)
+        result = await p.delete_account("any")
+        assert result is True
