@@ -33,9 +33,9 @@ class ProviderRegistry:
         eps = entry_points()
         # Python 3.12+ returns a SelectableGroups, <3.12 returns dict
         if hasattr(eps, "select"):
-            group_eps = eps.select(group=_ENTRY_POINT_GROUP)
+            group_eps = list(eps.select(group=_ENTRY_POINT_GROUP))
         else:
-            group_eps = eps.get(_ENTRY_POINT_GROUP, [])
+            group_eps = list(eps.get(_ENTRY_POINT_GROUP, []))
 
         for ep in group_eps:
             try:

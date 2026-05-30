@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import replace
 from typing import Annotated, Optional
 
 import typer
@@ -13,14 +14,13 @@ from rich.text import Text
 from burnbox import __version__
 from burnbox.client import BurnBoxClient
 from burnbox.config import AppConfig, load_config
-from burnbox.detectors import detect_codes, detect_links, extract_best_code
-from burnbox.exceptions import BurnBoxError, SessionError
-from burnbox.models import InboxMessage, Session
+from burnbox.detectors import copy_to_clipboard, detect_codes, detect_links, extract_best_code, MessageContext
+from burnbox.exceptions import AuthExpiredError, BurnBoxError, SessionError
+from burnbox.models import InboxMessage
+from burnbox.notifications import send_notification
 from burnbox.providers.base import Provider
-from burnbox.providers.mailtm import MailTmProvider
-from burnbox.providers.mailgw import MailGwProvider
-from burnbox.providers.onesecmail import OneSecMailProvider
 from burnbox.providers.registry import ProviderRegistry, select_provider
+from burnbox.providers.utils import build_registry
 from burnbox.session import SessionStore
 
 logging.basicConfig(
@@ -37,6 +37,10 @@ app = typer.Typer(
 )
 console = Console()
 
+logger = logging.getLogger(__name__)
+
+_MAX_CONSECUTIVE_ERRORS = 5
+
 
 def _version_callback(value: bool) -> None:
     if value:
@@ -52,23 +56,31 @@ def _render_message(msg: InboxMessage, config: AppConfig) -> None:
     header.append("Subject: ", style="bold yellow")
     header.append(msg.subject)
 
-    content = msg.content
-    codes = detect_codes(content)
-    links = detect_links(content)
+    escaped = msg.content.replace("[", "\\[")
+    content_parts: list[Text] = [Text(escaped)]
+    codes = detect_codes(msg.content, MessageContext(sender=msg.sender, subject=msg.subject))
+    links = detect_links(msg.content)
 
     if codes and config.copy_code:
         best = extract_best_code(codes)
         if best:
-            content += f"\n  [dim]Copied code: {best}[/dim]"
+            copy_to_clipboard(best)
+            content_parts.append(Text.from_markup(f"\n  [dim]Copied code: {best}[/dim]"))
+            if config.notifications:
+                send_notification("burnbox", f"Code: {best}")
 
     if codes:
         code_str = ", ".join(c.value for c in codes)
-        content += f"\n  [bold green]Codes: {code_str}[/bold green]"
+        content_parts.append(Text.from_markup(f"\n  [bold green]Codes: {code_str}[/bold green]"))
     if links:
-        content += f"\n  [bold blue]Links: {len(links)} found[/bold blue]"
+        content_parts.append(Text.from_markup(f"\n  [bold blue]Links: {len(links)} found[/bold blue]"))
+
+    combined = Text()
+    for part in content_parts:
+        combined.append(part)
 
     panel = Panel(
-        Text(content),
+        combined,
         title=header,
         border_style="red",
         padding=(1, 2),
@@ -77,38 +89,43 @@ def _render_message(msg: InboxMessage, config: AppConfig) -> None:
 
 
 def _build_registry(config: AppConfig) -> ProviderRegistry:
-    registry = ProviderRegistry()
-    if config.custom_url:
-        registry.register(MailTmProvider(base_url=config.custom_url))
-    else:
-        registry.register(MailTmProvider())
-    registry.register(MailGwProvider())
-    registry.register(OneSecMailProvider())
-    registry.discover_plugins()
-    return registry
+    return build_registry(config.custom_url)
 
 
-async def _select_provider(config: AppConfig) -> Provider:
+async def _select_provider(config: AppConfig) -> tuple[Provider, list[Provider]]:
     registry = _build_registry(config)
-    provider = await select_provider(registry.all(), preferred=config.provider_default)
+    all_providers = registry.all()
+    provider = await select_provider(all_providers, preferred=config.provider_default)
     if not provider:
         raise BurnBoxError("No available providers. Check your network.")
-    return provider
+    unused = [p for p in all_providers if p is not provider]
+    return provider, unused
 
 
-def _get_provider_by_name(config: AppConfig, name: str) -> Provider | None:
-    """Get a provider by name from registry without health check."""
+def _get_provider_by_name(config: AppConfig, name: str) -> tuple[Provider | None, list[Provider]]:
     registry = _build_registry(config)
-    return registry.get(name)
+    provider = registry.get(name)
+    unused = [p for p in registry.all() if p is not provider] if provider else registry.all()
+    return provider, unused
+
+
+async def _close_unused(unused: list[Provider]) -> None:
+    for p in unused:
+        try:
+            await p.aclose()
+        except Exception:
+            pass
 
 
 async def _poll_loop(client: BurnBoxClient, config: AppConfig) -> None:
     seen_ids: set[str] = set()
+    consecutive_errors = 0
 
     with Status("burnbox: waiting for drops...", console=console, spinner="dots") as status:
         while True:
             try:
                 new_mails = await client.fetch_new(seen_ids)
+                consecutive_errors = 0
                 if new_mails:
                     status.stop()
                     for mail in new_mails:
@@ -118,8 +135,24 @@ async def _poll_loop(client: BurnBoxClient, config: AppConfig) -> None:
                     status.start()
                 else:
                     status.update(f"burnbox: waiting for drops... [dim]({len(seen_ids)} seen)[/dim]")
+            except AuthExpiredError:
+                raise
             except BurnBoxError as exc:
+                consecutive_errors += 1
+                if consecutive_errors >= _MAX_CONSECUTIVE_ERRORS:
+                    raise BurnBoxError(
+                        f"Too many consecutive errors ({consecutive_errors}). Last: {exc}"
+                    ) from exc
                 console.print(f"[red]Error: {exc}[/red]")
+            except KeyboardInterrupt:
+                return
+            except Exception as exc:
+                consecutive_errors += 1
+                if consecutive_errors >= _MAX_CONSECUTIVE_ERRORS:
+                    raise BurnBoxError(
+                        f"Too many consecutive errors ({consecutive_errors}). Last: {exc}"
+                    ) from exc
+                logger.warning("Unexpected error in poll loop: %s", exc)
 
             await asyncio.sleep(config.poll_interval)
 
@@ -141,7 +174,7 @@ def main(
     ] = False,
     provider: Annotated[
         Optional[str],
-        typer.Option("--provider", help="Provider name (mailtm, mailgw, 1secmail)"),
+        typer.Option("--provider", help="Provider to use: mailtm, mailgw, guerrillamail, 1secmail"),
     ] = None,
     version: Annotated[
         bool,
@@ -161,63 +194,54 @@ def main(
 
     config = load_config()
     if poll is not None:
-        config = AppConfig(
-            provider_default=config.provider_default,
-            custom_url=config.custom_url,
-            poll_interval=poll,
-            timeout=config.timeout,
-            copy_address=config.copy_address,
-            copy_code=config.copy_code,
-        )
+        config = replace(config, poll_interval=poll)
     if timeout is not None:
-        config = AppConfig(
-            provider_default=config.provider_default,
-            custom_url=config.custom_url,
-            poll_interval=config.poll_interval,
-            timeout=timeout,
-            copy_address=config.copy_address,
-            copy_code=config.copy_code,
-        )
+        config = replace(config, timeout=timeout)
     if provider is not None:
-        config = AppConfig(
-            provider_default=provider,
-            custom_url=config.custom_url,
-            poll_interval=config.poll_interval,
-            timeout=config.timeout,
-            copy_address=config.copy_address,
-            copy_code=config.copy_code,
-        )
+        config = replace(config, provider_default=provider)
 
     asyncio.run(_run(config, keep))
 
 
 async def _run(config: AppConfig, keep: bool) -> None:
-    provider = await _select_provider(config)
+    provider, unused = await _select_provider(config)
     store = SessionStore()
     client = BurnBoxClient(provider=provider, session_store=store, config=config)
 
-    console.print(Panel.fit("[bold red]burnbox[/bold red] - Temp Email CLI", style="red"))
+    console.print(Panel(
+        "Temp email that burns after reading",
+        title="[bold red]burnbox[/bold red]",
+        border_style="red",
+        padding=(0, 2),
+    ))
     try:
         session = await client.register()
         console.print()
+        console.print(f"  [bold]Provider:[/bold] {provider.name}")
         console.print(f"  [bold]Address:[/bold]  [green]{session.address}[/green]")
         if config.copy_address:
+            copy_to_clipboard(session.address)
             console.print("[dim]  Address copied to clipboard[/dim]")
-        console.print("[dim]  Listening for drops... (Ctrl+C to exit)[/dim]\n")
+        console.print()
+        console.print("[dim]  Ctrl+C to exit and burn · --keep to preserve · burnbox resume[/dim]\n")
         await _poll_loop(client, config)
     except KeyboardInterrupt:
         pass
     except BurnBoxError as exc:
         console.print(f"[bold red]Critical failure: {exc}[/bold red]")
-        return
-
-    if not keep:
-        if await client.burn():
-            console.print("[dim]Burned.[/dim]")
-        else:
-            console.print("[bold red]Failed to burn account.[/bold red]")
-    else:
-        console.print("[dim]Kept alive. Resume with: [bold]burnbox resume[/bold][/dim]")
+    finally:
+        if not keep and client.session:
+            try:
+                if await client.burn():
+                    console.print("[dim]Burned.[/dim]")
+                else:
+                    console.print("[bold red]Failed to burn account.[/bold red]")
+            except Exception:
+                console.print("[bold red]Failed to burn account.[/bold red]")
+        elif keep and client.session:
+            console.print("[dim]Kept alive. Resume with: [bold]burnbox resume[/bold][/dim]")
+        await _close_unused(unused)
+        await provider.aclose()
 
 
 @app.command()
@@ -225,7 +249,7 @@ def address(
     ctx: typer.Context,
     provider: Annotated[
         Optional[str],
-        typer.Option("--provider", help="Provider name"),
+        typer.Option("--provider", help="Provider to use: mailtm, mailgw, guerrillamail, 1secmail"),
     ] = None,
 ) -> None:
     """Generate a temp email address and exit."""
@@ -234,36 +258,44 @@ def address(
 
     provider_name = provider or obj.get("provider")
     if provider_name:
-        config = AppConfig(
-            provider_default=provider_name,
-            custom_url=config.custom_url,
-            poll_interval=config.poll_interval,
-            timeout=config.timeout,
-            copy_address=config.copy_address,
-            copy_code=config.copy_code,
-        )
+        config = replace(config, provider_default=provider_name)
 
     asyncio.run(_run_address(config))
 
 
 async def _run_address(config: AppConfig) -> None:
-    provider = await _select_provider(config)
+    provider, unused = await _select_provider(config)
     store = SessionStore()
     client = BurnBoxClient(provider=provider, session_store=store, config=config)
 
-    session = await client.register()
-    console.print(f"[green]{session.address}[/green]")
-    if config.copy_address:
-        console.print("[dim]Address copied to clipboard.[/dim]")
+    try:
+        session = await client.register()
+        console.print(f"[green]{session.address}[/green]")
+        if config.copy_address:
+            copy_to_clipboard(session.address)
+            console.print("[dim]Address copied to clipboard.[/dim]")
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if client.session:
+            try:
+                await client.burn()
+            except Exception:
+                pass
+        store.delete()
+        await _close_unused(unused)
+        await provider.aclose()
 
 
 @app.command()
 def resume(
     ctx: typer.Context,
+    keep: Annotated[
+        bool,
+        typer.Option("--keep", "-k", help="Keep account alive after exit"),
+    ] = False,
 ) -> None:
     """Reconnect to the last saved session."""
-    obj = ctx.obj or {}
-    keep = obj.get("keep", False)
     config = load_config()
 
     asyncio.run(_run_resume(config, keep))
@@ -276,34 +308,41 @@ async def _run_resume(config: AppConfig, keep: bool) -> None:
         console.print("[bold red]No saved session found. Run 'burnbox' first.[/bold red]")
         return
 
-    # Use the provider that created the session, not a random alive one
-    provider = _get_provider_by_name(config, saved.provider_name)
+    provider, unused = _get_provider_by_name(config, saved.provider_name)
     if not provider:
         console.print(f"[bold red]Unknown provider '{saved.provider_name}' in saved session.[/bold red]")
         store.delete()
+        await _close_unused(unused)
         return
 
     client = BurnBoxClient(provider=provider, session_store=store, config=config)
 
     try:
         session = await client.resume()
+        console.print(f"  [bold]Provider:[/bold] {provider.name}")
         console.print(f"  [bold]Address:[/bold]  [green]{session.address}[/green]")
-        console.print("[dim]  Listening for drops... (Ctrl+C to exit)[/dim]\n")
+        console.print()
+        console.print("[dim]  Ctrl+C to exit and burn · --keep to preserve[/dim]\n")
         await _poll_loop(client, config)
     except KeyboardInterrupt:
         pass
     except SessionError as exc:
         console.print(f"[bold red]{exc}[/bold red]")
-        return
     except BurnBoxError as exc:
         console.print(f"[bold red]Critical failure: {exc}[/bold red]")
-        return
-
-    if not keep:
-        if await client.burn():
-            console.print("[dim]Burned.[/dim]")
-    else:
-        console.print("[dim]Kept alive. Resume with: [bold]burnbox resume[/bold][/dim]")
+    finally:
+        if not keep and client.session:
+            try:
+                if await client.burn():
+                    console.print("[dim]Burned.[/dim]")
+                else:
+                    console.print("[bold red]Failed to burn account.[/bold red]")
+            except Exception:
+                console.print("[bold red]Failed to burn account.[/bold red]")
+        elif keep and client.session:
+            console.print("[dim]Kept alive. Resume with: [bold]burnbox resume[/bold][/dim]")
+        await _close_unused(unused)
+        await provider.aclose()
 
 
 if __name__ == "__main__":

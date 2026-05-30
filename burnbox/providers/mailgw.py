@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import httpx
+
 from burnbox.providers.mailtm import MailTmProvider
 
 
@@ -12,7 +14,7 @@ class MailGwProvider(MailTmProvider):
     def __init__(
         self,
         base_url: str = "https://api.mail.gw",
-        client=None,
+        client: httpx.AsyncClient | None = None,
         timeout: float = 10.0,
     ) -> None:
         super().__init__(base_url=base_url, client=client, timeout=timeout)

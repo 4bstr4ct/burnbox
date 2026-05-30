@@ -4,9 +4,25 @@ build-backend = "hatchling.build"
 
 [project]
 name = "burnbox"
-version = "2.0.0"
+version = "1.0.0"
 description = "Temporary email that burns after reading"
 requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "burnbox contributors" }]
+keywords = ["temp-mail", "temporary-email", "disposable-email", "otp", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Email",
+    "Typing :: Typed",
+]
 dependencies = [
     "httpx",
     "html2text",
@@ -20,10 +36,24 @@ dependencies = [
 dev = [
     "pytest",
     "pytest-asyncio",
+    "ruff",
+    "mypy",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 99
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
 
 [project.scripts]
 burnbox = "burnbox.cli:app"

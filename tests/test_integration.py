@@ -1,19 +1,16 @@
-"""Integration test: full flow with mocked provider."""
 import pytest
-from unittest.mock import AsyncMock, patch
-from pathlib import Path
+from unittest.mock import AsyncMock
 
 from burnbox.config import AppConfig
 from burnbox.client import BurnBoxClient
 from burnbox.models import Session, InboxMessage
-from burnbox.providers.registry import ProviderRegistry, select_provider
+from burnbox.providers.registry import select_provider
 from burnbox.session import SessionStore
 
 
 class TestFullFlow:
     @pytest.mark.asyncio
     async def test_register_poll_burn(self, tmp_path):
-        # Setup mock provider
         provider = AsyncMock()
         provider.name = "testmock"
         provider.is_alive.return_value = True
@@ -29,22 +26,17 @@ class TestFullFlow:
         config = AppConfig(copy_address=False)
         client = BurnBoxClient(provider=provider, session_store=store, config=config)
 
-        # 1. Register
         session = await client.register()
         assert session.address == "auto@test.com"
 
-        # 2. Session saved without password
         loaded = store.load()
         assert loaded is not None
         assert loaded.address == "auto@test.com"
-        assert "password" not in loaded.to_dict()
 
-        # 3. Fetch messages
         messages = await client.fetch_new(seen_ids=set())
         assert len(messages) == 1
         assert "4455" in messages[0].content
 
-        # 4. Burn
         result = await client.burn()
         assert result is True
         assert store.load() is None
@@ -65,19 +57,15 @@ class TestFullFlow:
         config = AppConfig(copy_address=False)
         client = BurnBoxClient(provider=provider, session_store=store, config=config)
 
-        # 1. Register
         session = await client.register()
         assert session.address == "keep@test.com"
 
-        # 2. Session persists
         assert store.load() is not None
 
-        # 3. Simulate resume (new client instance, same store)
         client2 = BurnBoxClient(provider=provider, session_store=store, config=config)
         resumed = await client2.resume()
         assert resumed.address == "keep@test.com"
 
-        # 4. Burn
         result = await client2.burn()
         assert result is True
         assert store.load() is None

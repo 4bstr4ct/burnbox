@@ -9,10 +9,13 @@ from typing import Any
 import html2text
 import httpx
 
-from burnbox.models import InboxMessage
-from burnbox.providers.base import ProviderSession
+from burnbox.exceptions import APIError, AuthExpiredError
+from burnbox.models import InboxMessage, Session
+from burnbox.retry import RetryConfig, raise_for_status, retry
 
 logger = logging.getLogger(__name__)
+
+_RETRY_CFG = RetryConfig()
 
 
 def _generate_login(length: int = 10) -> str:
@@ -21,7 +24,11 @@ def _generate_login(length: int = 10) -> str:
 
 
 class OneSecMailProvider:
-    """1secmail.com provider — simple REST API, no password, no account deletion."""
+    """1secmail.com provider — simple REST API, no password, no account deletion.
+
+    Emails expire naturally after ~1 hour. delete_account() is a no-op that
+    returns True (best-effort: nothing to delete, inbox auto-expires).
+    """
 
     name: str = "1secmail"
     supports_custom_url: bool = False
@@ -43,9 +50,15 @@ class OneSecMailProvider:
         self._html_parser.body_width = 0
 
     async def _api(self, **params: Any) -> Any:
-        response = await self._client.get(self._base_url, params=params)
-        response.raise_for_status()
-        return response.json()
+        async def _do() -> Any:
+            response = await self._client.get(self._base_url, params=params)
+            raise_for_status(response, _RETRY_CFG)
+            try:
+                return response.json()
+            except Exception as exc:
+                raise APIError(0, f"Invalid JSON response: {exc}") from exc
+
+        return await retry(_do, cfg=_RETRY_CFG)
 
     async def is_alive(self) -> bool:
         try:
@@ -56,15 +69,17 @@ class OneSecMailProvider:
         except Exception:
             return False
 
-    async def register(self) -> ProviderSession:
+    async def register(self) -> Session:
         login = _generate_login()
         domains_resp = await self._api(action="getDomainList")
-        domain = domains_resp[0] if domains_resp else "1secmail.com"
+        if not isinstance(domains_resp, list) or not domains_resp:
+            raise APIError(0, "No domains available from 1secmail")
+        domain = str(domains_resp[0])
         self._address = f"{login}@{domain}"
         self._login = login
         self._domain = domain
 
-        return ProviderSession(
+        return Session(
             address=self._address,
             account_id=self._address,
             token="",
@@ -72,36 +87,36 @@ class OneSecMailProvider:
             created_at=time.time(),
         )
 
-    async def login(self, address: str, password: str) -> ProviderSession:
-        login, domain = address.split("@", 1)
-        self._address = address
+    async def restore(self, session: Session) -> None:
+        if "@" not in session.address:
+            raise AuthExpiredError(f"Invalid address format: {session.address!r}")
+        login, domain = session.address.split("@", 1)
+        self._address = session.address
         self._login = login
         self._domain = domain
-        return ProviderSession(
-            address=address,
-            account_id=address,
-            token="",
-            provider_name=self.name,
-            created_at=time.time(),
-        )
 
     async def fetch_messages(self, seen_ids: set[str]) -> list[InboxMessage]:
-        assert self._login and self._domain
+        if not self._login or not self._domain:
+            raise AuthExpiredError("1secmail: not registered or restored")
         data = await self._api(
             action="getMessages", login=self._login, domain=self._domain
         )
+        if not isinstance(data, list):
+            return []
         new = [m for m in data if str(m.get("id", "")) not in seen_ids]
 
         messages: list[InboxMessage] = []
         for m in new:
-            msg_id = str(m["id"])
+            msg_id = str(m.get("id", ""))
+            if not msg_id:
+                continue
             full = await self._api(
                 action="readMessage", login=self._login,
                 domain=self._domain, id=msg_id,
             )
             body = full.get("body") or full.get("textBody") or "[Empty Message]"
             if full.get("htmlBody"):
-                body = self._html_parser.handle(full["htmlBody"]).strip()
+                body = self._html_parser.handle(str(full["htmlBody"])).strip()
             messages.append(InboxMessage(
                 id=msg_id,
                 sender=m.get("from", ""),

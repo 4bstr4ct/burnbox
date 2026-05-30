@@ -3,7 +3,6 @@ from typer.testing import CliRunner
 from unittest.mock import AsyncMock, patch
 
 from burnbox.models import Session
-from burnbox.config import AppConfig
 from burnbox.exceptions import SessionError
 from burnbox.cli import app
 
@@ -35,7 +34,7 @@ class TestVersion:
 class TestAddressCommand:
     @patch("burnbox.cli._select_provider")
     def test_address_command(self, mock_select, mock_provider):
-        mock_select.return_value = mock_provider
+        mock_select.return_value = (mock_provider, [])
 
         result = runner.invoke(app, ["address"])
         assert result.exit_code == 0
@@ -44,11 +43,12 @@ class TestAddressCommand:
 
 class TestResumeCommand:
     @patch("burnbox.cli.BurnBoxClient")
-    @patch("burnbox.cli._select_provider")
-    def test_resume_no_session(self, mock_select, mock_client_cls, mock_provider):
-        mock_select.return_value = mock_provider
+    @patch("burnbox.cli._get_provider_by_name")
+    def test_resume_no_session(self, mock_get, mock_client_cls, mock_provider):
+        mock_get.return_value = (mock_provider, [])
         mock_client = AsyncMock()
         mock_client.resume.side_effect = SessionError("No saved session found. Run 'burnbox' first.")
+        mock_client.session = None
         mock_client_cls.return_value = mock_client
 
         result = runner.invoke(app, ["resume"])

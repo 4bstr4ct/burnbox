@@ -3,16 +3,21 @@ from __future__ import annotations
 import logging
 
 from burnbox.config import AppConfig
-from burnbox.detectors import copy_to_clipboard
-from burnbox.exceptions import BurnBoxError, SessionError
+from burnbox.exceptions import AuthExpiredError, SessionError
 from burnbox.models import InboxMessage, Session
-from burnbox.providers.base import Provider, ProviderSession
+from burnbox.providers.base import Provider
 from burnbox.session import SessionStore
 
 logger = logging.getLogger(__name__)
 
 
 class BurnBoxClient:
+    """Core client orchestrating provider lifecycle.
+
+    register() → fetch_new() → burn() is the normal flow.
+    resume() → fetch_new() → burn() reconnects to a saved session.
+    """
+
     def __init__(
         self,
         provider: Provider,
@@ -25,29 +30,22 @@ class BurnBoxClient:
         self._session: Session | None = None
 
     async def register(self) -> Session:
-        ps: ProviderSession = await self._provider.register()
-        session = Session(
-            address=ps.address,
-            account_id=ps.account_id,
-            token=ps.token,
-            provider_name=ps.provider_name,
-            created_at=ps.created_at,
-        )
+        """Create a new temp email account and save the session."""
+        session = await self._provider.register()
         self._session = session
         self._store.save(session)
-        if self._config.copy_address:
-            copy_to_clipboard(session.address)
         return session
 
     async def resume(self) -> Session:
+        """Restore a saved session. Raises SessionError if expired or missing."""
         session = self._store.load()
         if not session:
             raise SessionError("No saved session found. Run 'burnbox' first.")
         self._session = session
-        # Verify token is still valid by trying to fetch
+        await self._provider.restore(session)
         try:
             await self._provider.fetch_messages(seen_ids=set())
-        except Exception:
+        except AuthExpiredError:
             self._store.delete()
             raise SessionError("Session expired. Start a new one with 'burnbox'.")
         return session
@@ -56,6 +54,7 @@ class BurnBoxClient:
         return await self._provider.fetch_messages(seen_ids)
 
     async def burn(self) -> bool:
+        """Delete the account and session file. Returns True if successful."""
         if not self._session:
             return False
         result = await self._provider.delete_account(self._session.account_id)

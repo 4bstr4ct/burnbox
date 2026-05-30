@@ -1,6 +1,6 @@
-import pytest
-from burnbox.providers.base import Provider, ProviderSession
+from burnbox.models import Session
 from burnbox.providers.registry import ProviderRegistry, select_provider
+import pytest
 
 
 class FakeProvider:
@@ -14,23 +14,23 @@ class FakeProvider:
     async def is_alive(self) -> bool:
         return self._alive
 
-    async def register(self) -> ProviderSession:
-        return ProviderSession(
+    async def register(self) -> Session:
+        return Session(
             address=f"test@{self.name}.com", account_id="1",
             token="t", provider_name=self.name, created_at=0.0,
         )
 
-    async def login(self, address: str, password: str) -> ProviderSession:
-        return ProviderSession(
-            address=address, account_id="1",
-            token="t", provider_name=self.name, created_at=0.0,
-        )
+    async def restore(self, session: Session) -> None:
+        pass
 
     async def fetch_messages(self, seen_ids: set[str]) -> list:
         return []
 
     async def delete_account(self, account_id: str) -> bool:
         return True
+
+    async def aclose(self) -> None:
+        pass
 
 
 class TestProviderRegistry:
@@ -82,7 +82,6 @@ class TestSelectProvider:
             FakeProvider("dead2", alive=False),
         ]
         result = await select_provider(providers)
-        # Health checks are unreliable — fallback to first provider
         assert result is not None
         assert result.name == "dead1"
 
@@ -108,7 +107,6 @@ class TestSelectProvider:
     async def test_preferred_not_found(self):
         providers = [FakeProvider("a", alive=True)]
         result = await select_provider(providers, preferred="missing")
-        # Preferred not found in list, falls back to parallel check
         assert result.name == "a"
 
     @pytest.mark.asyncio

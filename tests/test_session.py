@@ -1,6 +1,6 @@
 import json
 import pytest
-from pathlib import Path
+from dataclasses import asdict
 from burnbox.models import Session
 from burnbox.session import SessionStore
 
@@ -12,7 +12,7 @@ class TestSession:
             provider_name="mailtm", created_at=100.0,
         )
         assert s.address == "a@b.c"
-        assert s.password is None
+        assert s.account_id == "1"
 
     def test_frozen(self):
         s = Session(address="a@b.c", account_id="1", token="tok",
@@ -20,19 +20,25 @@ class TestSession:
         with pytest.raises(AttributeError):
             s.address = "x"
 
-    def test_no_password_in_dict(self):
+    def test_repr_masks_token(self):
+        s = Session(address="a@b.c", account_id="1", token="secret123",
+                     provider_name="mailtm", created_at=100.0)
+        r = repr(s)
+        assert "secret123" not in r
+        assert "***" in r
+
+    def test_repr_empty_token(self):
+        s = Session(address="a@b.c", account_id="1", token="",
+                     provider_name="1secmail", created_at=100.0)
+        r = repr(s)
+        assert "(empty)" in r
+
+    def test_asdict(self):
         s = Session(address="a@b.c", account_id="1", token="tok",
                      provider_name="mailtm", created_at=100.0)
-        d = s.to_dict()
-        assert "password" not in d
+        d = asdict(s)
         assert d["address"] == "a@b.c"
         assert d["provider_name"] == "mailtm"
-
-    def test_with_password_still_excluded_from_dict(self):
-        s = Session(address="a@b.c", account_id="1", token="tok",
-                     provider_name="mailtm", created_at=100.0, password="secret")
-        d = s.to_dict()
-        assert "password" not in d
 
 
 class TestSessionStore:
@@ -64,14 +70,13 @@ class TestSessionStore:
         s = Session(address="a@b.c", account_id="1", token="tok",
                      provider_name="mailtm", created_at=100.0)
         store.save(s)
-        import stat
         mode = (tmp_path / "session.json").stat().st_mode & 0o777
         assert mode == 0o600
 
     def test_no_password_in_saved_file(self, tmp_path):
         store = SessionStore(dir=tmp_path)
         s = Session(address="a@b.c", account_id="1", token="tok",
-                     provider_name="mailtm", created_at=100.0, password="secret")
+                     provider_name="mailtm", created_at=100.0)
         store.save(s)
         data = json.loads((tmp_path / "session.json").read_text())
         assert "password" not in data
@@ -80,3 +85,16 @@ class TestSessionStore:
         (tmp_path / "session.json").write_text("not json{{{")
         store = SessionStore(dir=tmp_path)
         assert store.load() is None
+
+    def test_load_missing_required_keys(self, tmp_path):
+        (tmp_path / "session.json").write_text(json.dumps({"address": "x@y.z"}))
+        store = SessionStore(dir=tmp_path)
+        assert store.load() is None
+
+    def test_atomic_write_no_partial(self, tmp_path):
+        store = SessionStore(dir=tmp_path)
+        s = Session(address="a@b.c", account_id="1", token="tok",
+                     provider_name="mailtm", created_at=100.0)
+        store.save(s)
+        assert not (tmp_path / "session.tmp").exists()
+        assert (tmp_path / "session.json").exists()

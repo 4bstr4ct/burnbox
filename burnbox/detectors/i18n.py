@@ -1,0 +1,142 @@
+from __future__ import annotations
+
+OTP_LABELS: dict[str, list[str]] = {
+    "en": [
+        "code",
+        "pin",
+        "otp",
+        "verification code",
+        "verification number",
+        "confirm(?:ation)? code",
+        "security code",
+        "authentication code",
+        "one[.-]time (?:password|passcode)",
+        "2fa code",
+        "mfa code",
+        "login code",
+        "sign[.-]in code",
+    ],
+    "ru": [
+        "код",
+        "код подтверждения",
+        "пин",
+        "одноразовый пароль",
+        "пароль",
+        "код проверки",
+        "код авторизации",
+    ],
+    "de": [
+        "code",
+        "bestätigungscode",
+        "pin",
+        "verifizierungscode",
+        "sicherheitscode",
+        "authentifizierungscode",
+        "einmalpasswort",
+        "einmal(?:[- ]?)code",
+    ],
+    "fr": [
+        "code",
+        "code de vérification",
+        "pin",
+        "mot de passe à usage unique",
+        "code de sécurité",
+        "code d(?:e |')authentification",
+    ],
+    "es": [
+        "código",
+        "código de verificación",
+        "pin",
+        "contraseña de un solo uso",
+        "código de seguridad",
+        "código de autenticación",
+    ],
+    "pt": [
+        "código",
+        "código de verificação",
+        "pin",
+        "senha de uso único",
+        "código de segurança",
+        "código de autenticação",
+    ],
+    "zh": [
+        "验证码",
+        "动态密码",
+        "一次性密码",
+        "校验码",
+    ],
+    "ja": [
+        "認証コード",
+        "確認コード",
+        "ワンタイムパスワード",
+        "PIN",
+        "セキュリティコード",
+    ],
+    "ko": [
+        "인증 코드",
+        "확인 코드",
+        "일회용 비밀번호",
+        "보안 코드",
+    ],
+    "hi": [
+        "कोड",
+        "OTP",
+        "सत्यापन कोड",
+        "पिन",
+        "सुरक्षा कोड",
+    ],
+    "ar": [
+        "رمز",
+        "رمز التحقق",
+        "كلمة المرور",
+        "رمز الأمان",
+    ],
+    "tr": [
+        "kod",
+        "doğrulama kodu",
+        "güvenlik kodu",
+        "tek kullanımlık şifre",
+    ],
+}
+
+CONTEXT_BOOST_WORDS: dict[str, list[str]] = {
+    "en": [
+        "verify", "verification", "authenticate", "authentication",
+        "login", "sign in", "sign up", "register", "confirm",
+        "activate", "two-factor", "2fa", "mfa",
+    ],
+    "ru": [
+        "подтверд", "верификац", "авторизац", "войти", "регистрац", "активир",
+    ],
+}
+
+RESET_PATH_SEGMENTS: list[str] = [
+    "reset",
+    "verify",
+    "confirm",
+    "activate",
+    "unlock",
+    "recover",
+    "validate",
+    "challenge",
+    "approve",
+    "email-verification",
+    "password-reset",
+    "account-verify",
+    "token-confirm",
+]
+
+URL_CODE_PARAMS: list[str] = [
+    "code",
+    "token",
+    "otp",
+    "verification_code",
+    "confirmation_code",
+    "verify",
+    "pin",
+    "auth_code",
+    "access_code",
+    "secret",
+    "challenge",
+    "ticket",
+]

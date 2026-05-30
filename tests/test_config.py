@@ -1,5 +1,4 @@
 import pytest
-from pathlib import Path
 from burnbox.config import load_config, AppConfig
 
 

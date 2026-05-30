@@ -1,10 +1,9 @@
 import pytest
-from unittest.mock import AsyncMock, patch
-from pathlib import Path
+from unittest.mock import AsyncMock
 
 from burnbox.client import BurnBoxClient
 from burnbox.config import AppConfig
-from burnbox.exceptions import SessionError
+from burnbox.exceptions import AuthExpiredError, SessionError
 from burnbox.models import Session, InboxMessage
 from burnbox.session import SessionStore
 
@@ -51,28 +50,6 @@ class TestBurnBoxClient:
         loaded = mock_session_store.load()
         assert loaded is not None
         assert loaded.address == "test@example.com"
-
-    @pytest.mark.asyncio
-    async def test_register_copies_address(self, mock_provider, mock_session_store):
-        with patch("burnbox.client.copy_to_clipboard") as mock_copy:
-            client = BurnBoxClient(
-                provider=mock_provider,
-                session_store=mock_session_store,
-                config=AppConfig(copy_address=True),
-            )
-            await client.register()
-            mock_copy.assert_called_once_with("test@example.com")
-
-    @pytest.mark.asyncio
-    async def test_register_no_copy(self, mock_provider, mock_session_store):
-        with patch("burnbox.client.copy_to_clipboard") as mock_copy:
-            client = BurnBoxClient(
-                provider=mock_provider,
-                session_store=mock_session_store,
-                config=AppConfig(copy_address=False),
-            )
-            await client.register()
-            mock_copy.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_fetch_new(self, mock_provider, mock_session_store):
@@ -143,7 +120,7 @@ class TestBurnBoxClient:
             token="tok", provider_name="mailtm", created_at=0.0,
         )
         mock_session_store.save(session)
-        mock_provider.fetch_messages.side_effect = Exception("401 Unauthorized")
+        mock_provider.fetch_messages.side_effect = AuthExpiredError("Session expired")
 
         client = BurnBoxClient(
             provider=mock_provider,
@@ -152,5 +129,4 @@ class TestBurnBoxClient:
         )
         with pytest.raises(SessionError, match="Session expired"):
             await client.resume()
-        # Session should be deleted
         assert mock_session_store.load() is None

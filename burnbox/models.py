@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -25,9 +25,12 @@ class Session:
     token: str
     provider_name: str
     created_at: float
-    password: str | None = None
 
-    def to_dict(self) -> dict:
-        d = asdict(self)
-        d.pop("password", None)
-        return d
+    def __repr__(self) -> str:
+        t = self.token
+        masked = f"***({len(t)} chars)" if t else "(empty)"
+        return (
+            f"Session(address={self.address!r}, account_id={self.account_id!r}, "
+            f"token={masked}, provider_name={self.provider_name!r}, "
+            f"created_at={self.created_at!r})"
+        )

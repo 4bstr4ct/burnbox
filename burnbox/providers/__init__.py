@@ -1,3 +1,3 @@
-from burnbox.providers.base import Provider, ProviderSession
+from burnbox.providers.base import Provider
 
-__all__ = ["Provider", "ProviderSession"]
+__all__ = ["Provider"]
