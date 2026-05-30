@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import html as _html
 import logging
 import secrets
 import string
@@ -68,7 +69,7 @@ def _normalize_content(
         else (raw_text or "")
     )
     if html_str.strip():
-        return parser.handle(html_str).strip()
+        return _html.unescape(parser.handle(html_str).strip())
     return text_str.strip() or "[Empty Message]"
 
 

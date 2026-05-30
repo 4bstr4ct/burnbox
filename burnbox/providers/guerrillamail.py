@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import html as _html
 import logging
 import secrets
 import string
@@ -159,7 +160,7 @@ class GuerrillaMailProvider:
             excerpt = full.get("mail_excerpt", "")
             if body.strip():
                 if body != excerpt:
-                    body = self._html_parser.handle(body).strip()
+                    body = _html.unescape(self._html_parser.handle(body).strip())
             if not body:
                 body = excerpt or "[Empty Message]"
 

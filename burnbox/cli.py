@@ -39,6 +39,7 @@ console = Console()
 
 logger = logging.getLogger(__name__)
 
+_MAX_DISPLAY_CODES = 5
 _MAX_CONSECUTIVE_ERRORS = 5
 
 
@@ -69,8 +70,10 @@ def _render_message(msg: InboxMessage, config: AppConfig) -> str | None:
                 send_notification("burnbox", "Verification code received")
 
     if codes:
-        code_str = ", ".join(c.value for c in codes)
-        content_parts.append(Text.from_markup(f"\n  [bold green]Codes: {code_str}[/bold green]"))
+        top_codes = sorted(codes, key=lambda c: c.confidence, reverse=True)[:_MAX_DISPLAY_CODES]
+        code_str = ", ".join(c.value for c in top_codes)
+        extra = f" (+{len(codes) - _MAX_DISPLAY_CODES} more)" if len(codes) > _MAX_DISPLAY_CODES else ""
+        content_parts.append(Text.from_markup(f"\n  [bold green]Codes: {code_str}{extra}[/bold green]"))
     if links:
         content_parts.append(Text.from_markup(f"\n  [bold blue]Links: {len(links)} found[/bold blue]"))
 

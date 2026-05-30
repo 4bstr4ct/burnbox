@@ -11,7 +11,9 @@ _ALPHANUMERIC_LABELED = re.compile(
     re.IGNORECASE,
 )
 _ALPHANUMERIC_GENERIC = re.compile(r"\b([A-Za-z0-9]{4,8}-[A-Za-z0-9]{4,8}(?:-[A-Za-z0-9]{4,8})*)\b")
-_ALPHANUMERIC_SIMPLE = re.compile(r"\b([A-Za-z0-9]{6,12})\b")
+_UUID_PATTERN = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}")
+_HEX_ONLY_GROUP = re.compile(r"^[0-9a-fA-F]{4,12}$")
+_ALPHANUMERIC_SIMPLE = re.compile(r"\b((?=[A-Za-z0-9]*\d)[A-Za-z0-9]{6,12})\b")
 _PROXIMITY = 80
 _BASE_CONFIDENCE = 0.5
 _LABELED_CONFIDENCE = 0.85
@@ -49,20 +51,28 @@ class AlphanumericOtpParser:
 
         for m in _ALPHANUMERIC_GENERIC.finditer(text):
             value = m.group(1)
-            if value not in seen_values:
-                matches.append(CodeMatch(
-                    value=value,
-                    start=m.start(1),
-                    end=m.end(1),
-                    kind="alphanumeric_otp",
-                    source_parser=self.name,
-                    confidence=_BASE_CONFIDENCE,
-                ))
-                seen_values.add(value)
+            if value in seen_values:
+                continue
+            if _UUID_PATTERN.match(value):
+                continue
+            groups = value.split("-")
+            if all(_HEX_ONLY_GROUP.match(g) for g in groups) and len(groups) >= 4:
+                continue
+            matches.append(CodeMatch(
+                value=value,
+                start=m.start(1),
+                end=m.end(1),
+                kind="alphanumeric_otp",
+                source_parser=self.name,
+                confidence=_BASE_CONFIDENCE,
+            ))
+            seen_values.add(value)
 
         for m in _ALPHANUMERIC_SIMPLE.finditer(text):
             value = m.group(1)
             if value not in seen_values:
+                if _HEX_ONLY_GROUP.match(value):
+                    continue
                 window_start = max(0, m.start() - _PROXIMITY)
                 window_end = min(len(lower_text), m.end() + _PROXIMITY)
                 window = lower_text[window_start:window_end]
