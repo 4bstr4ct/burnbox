@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 import string
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 _API_BASE = "https://api.guerrillamail.com/ajax.php"
 _RETRY_CFG = RetryConfig()
+_FETCH_CONCURRENCY = 5
 
 
 def _generate_username(length: int = 10) -> str:
@@ -77,7 +79,10 @@ class GuerrillaMailProvider:
 
     async def is_alive(self) -> bool:
         try:
-            data = await self._api(f="get_email_address")
+            response = await self._client.get(self._base_url, params={"f": "get_email_address"})
+            if response.status_code != 200:
+                return False
+            data = response.json()
             return "email_addr" in data
         except Exception:
             return False
@@ -122,8 +127,8 @@ class GuerrillaMailProvider:
             seq=0,
         )
         raw_list = data.get("list", [])
-        messages: list[InboxMessage] = []
 
+        to_fetch: list[tuple[str, str, str]] = []
         for m in raw_list:
             mail_id = str(m.get("mail_id", ""))
             if not mail_id or mail_id in seen_ids:
@@ -134,25 +139,60 @@ class GuerrillaMailProvider:
                 seen_ids.add(mail_id)
                 continue
 
-            full = await self._api(
-                f="fetch_email",
-                email_id=safe_path_segment(mail_id),
-                sid_token=self._sid_token,
-            )
+            to_fetch.append((
+                mail_id,
+                sender,
+                m.get("mail_subject", "No Subject"),
+            ))
+
+        sem = asyncio.Semaphore(_FETCH_CONCURRENCY)
+
+        async def _fetch_one(mid: str, sender: str, subject: str) -> InboxMessage:
+            async with sem:
+                full = await self._api(
+                    f="fetch_email",
+                    email_id=safe_path_segment(mid),
+                    sid_token=self._sid_token,
+                )
 
             body = full.get("mail_body", "")
-            if "<" in body and ">" in body:
-                body = self._html_parser.handle(body).strip()
+            excerpt = full.get("mail_excerpt", "")
+            if body.strip():
+                if body != excerpt:
+                    body = self._html_parser.handle(body).strip()
             if not body:
-                body = full.get("mail_excerpt", "") or "[Empty Message]"
+                body = excerpt or "[Empty Message]"
 
-            messages.append(InboxMessage(
-                id=mail_id,
-                sender=m.get("mail_from", "Unknown Sender"),
-                subject=m.get("mail_subject", "No Subject"),
+            return InboxMessage(
+                id=mid,
+                sender=sender,
+                subject=subject,
                 content=body.strip() or "[Empty Message]",
-            ))
+            )
+
+        results = await asyncio.gather(
+            *[_fetch_one(mid, s, sub) for mid, s, sub in to_fetch],
+            return_exceptions=True,
+        )
+
+        messages: list[InboxMessage] = []
+        for (mid, s, sub), r in zip(to_fetch, results):
+            if isinstance(r, InboxMessage):
+                messages.append(r)
+            elif isinstance(r, Exception):
+                logger.warning("Failed to fetch message %s: %s", mid, r)
         return messages
 
     async def delete_account(self, account_id: str) -> bool:
+        if not self._sid_token:
+            return True
+        try:
+            response = await self._client.get(
+                self._base_url,
+                params={"f": "forget_me", "sid_token": self._sid_token},
+            )
+            response.raise_for_status()
+            logger.info("Guerrilla Mail session forgotten (sid=%s...)", account_id[:8])
+        except Exception as exc:
+            logger.warning("Guerrilla Mail forget_me failed: %s", exc)
         return True

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from burnbox.detectors.base import CodeMatch, MessageContext
-from burnbox.detectors.clipboard import copy_to_clipboard
+from burnbox.detectors.clipboard import copy_to_clipboard, copy_to_clipboard_auto_clear
 from burnbox.detectors.engine import ParserEngine
 
 _engine = ParserEngine()
@@ -25,6 +25,7 @@ __all__ = [
     "MessageContext",
     "ParserEngine",
     "copy_to_clipboard",
+    "copy_to_clipboard_auto_clear",
     "detect_codes",
     "detect_links",
     "extract_best_code",

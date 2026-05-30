@@ -14,7 +14,7 @@ from rich.text import Text
 from burnbox import __version__
 from burnbox.client import BurnBoxClient
 from burnbox.config import AppConfig, load_config
-from burnbox.detectors import copy_to_clipboard, detect_codes, detect_links, extract_best_code, MessageContext
+from burnbox.detectors import copy_to_clipboard, copy_to_clipboard_auto_clear, detect_codes, detect_links, extract_best_code, MessageContext
 from burnbox.exceptions import AuthExpiredError, BurnBoxError, SessionError
 from burnbox.models import InboxMessage
 from burnbox.notifications import send_notification
@@ -48,7 +48,7 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
-def _render_message(msg: InboxMessage, config: AppConfig) -> None:
+def _render_message(msg: InboxMessage, config: AppConfig) -> str | None:
     header = Text()
     header.append("From: ", style="bold cyan")
     header.append(msg.sender)
@@ -56,18 +56,20 @@ def _render_message(msg: InboxMessage, config: AppConfig) -> None:
     header.append("Subject: ", style="bold yellow")
     header.append(msg.subject)
 
-    escaped = msg.content.replace("[", "\\[")
+    escaped = msg.content.replace("[", "\\[").replace("]", "\\]")
     content_parts: list[Text] = [Text(escaped)]
     codes = detect_codes(msg.content, MessageContext(sender=msg.sender, subject=msg.subject))
     links = detect_links(msg.content)
+    best: str | None = None
 
     if codes and config.copy_code:
         best = extract_best_code(codes)
         if best:
             copy_to_clipboard(best)
+            logger.info("OTP detected: %s", best)
             content_parts.append(Text.from_markup(f"\n  [dim]Copied code: {best}[/dim]"))
             if config.notifications:
-                send_notification("burnbox", f"Code: {best}")
+                send_notification("burnbox", "Verification code received")
 
     if codes:
         code_str = ", ".join(c.value for c in codes)
@@ -86,6 +88,7 @@ def _render_message(msg: InboxMessage, config: AppConfig) -> None:
         padding=(1, 2),
     )
     console.print(panel)
+    return best
 
 
 def _build_registry(config: AppConfig) -> ProviderRegistry:
@@ -128,9 +131,14 @@ async def _poll_loop(client: BurnBoxClient, config: AppConfig) -> None:
                 consecutive_errors = 0
                 if new_mails:
                     status.stop()
+                    last_code: str | None = None
                     for mail in new_mails:
-                        _render_message(mail, config)
+                        code = _render_message(mail, config)
+                        if code:
+                            last_code = code
                         seen_ids.add(mail.id)
+                    if last_code:
+                        await copy_to_clipboard_auto_clear(last_code)
                     status.update(f"burnbox: waiting for drops... [dim]({len(seen_ids)} seen)[/dim]")
                     status.start()
                 else:
@@ -172,6 +180,14 @@ def main(
         bool,
         typer.Option("--keep", "-k", help="Keep account alive after exit"),
     ] = False,
+    no_clipboard: Annotated[
+        bool,
+        typer.Option("--no-clipboard", help="Do not copy to clipboard"),
+    ] = False,
+    no_notify: Annotated[
+        bool,
+        typer.Option("--no-notify", help="Disable desktop notifications"),
+    ] = False,
     provider: Annotated[
         Optional[str],
         typer.Option("--provider", help="Provider to use: mailtm, guerrillamail"),
@@ -189,6 +205,8 @@ def main(
             "timeout": timeout,
             "keep": keep,
             "provider": provider,
+            "no_clipboard": no_clipboard,
+            "no_notify": no_notify,
         }
         return
 
@@ -199,6 +217,10 @@ def main(
         config = replace(config, timeout=timeout)
     if provider is not None:
         config = replace(config, provider_default=provider)
+    if no_clipboard:
+        config = replace(config, copy_address=False, copy_code=False)
+    if no_notify:
+        config = replace(config, notifications=False)
 
     asyncio.run(_run(config, keep))
 
@@ -259,6 +281,10 @@ def address(
     provider_name = provider or obj.get("provider")
     if provider_name:
         config = replace(config, provider_default=provider_name)
+    if obj.get("no_clipboard"):
+        config = replace(config, copy_address=False, copy_code=False)
+    if obj.get("no_notify"):
+        config = replace(config, notifications=False)
 
     asyncio.run(_run_address(config))
 
@@ -296,7 +322,12 @@ def resume(
     ] = False,
 ) -> None:
     """Reconnect to the last saved session."""
+    obj = ctx.obj or {}
     config = load_config()
+    if obj.get("no_clipboard"):
+        config = replace(config, copy_address=False, copy_code=False)
+    if obj.get("no_notify"):
+        config = replace(config, notifications=False)
 
     asyncio.run(_run_resume(config, keep))
 

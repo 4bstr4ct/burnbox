@@ -66,6 +66,8 @@ That's it. You'll get a temp address, it auto-copies to clipboard, and burnbox w
 --poll, -p       Polling interval in seconds (default: 5)
 --timeout, -t    HTTP request timeout (default: 10)
 --keep, -k       Keep account alive after exit
+--no-clipboard   Do not copy to clipboard
+--no-notify      Disable desktop notifications
 --version, -v    Show version
 --help, -h       Show help
 ```
@@ -84,6 +86,9 @@ burnbox resume
 
 # One-shot: just get a temp address (burned immediately)
 burnbox address
+
+# Headless mode: no clipboard, no notifications
+burnbox --no-clipboard --no-notify
 ```
 
 ## Programmatic API
@@ -154,7 +159,7 @@ BURNBOX_CUSTOM_URL=https://...
 | Provider | Auth | Delete account | Domains | Custom URL |
 |---|---|---|---|---|
 | **mail.tm** | Register + token | Yes | Multiple | Yes |
-| **guerrillamail** | Session-based | Yes | sharklasers.com, grr.la, etc | No |
+| **guerrillamail** | Session-based | Best-effort (forget_me) | sharklasers.com, grr.la, etc | No |
 
 burnbox automatically selects the first available provider with a health check. If one is down, it falls back to the next. You can also add custom providers via the plugin system.
 
@@ -170,7 +175,7 @@ burnbox detects verification codes from incoming emails using a multi-parser eng
 
 Supports 12 languages for label detection: English, Russian, German, French, Spanish, Portuguese, Chinese, Japanese, Korean, Hindi, Arabic, Turkish. Context-aware confidence boosting is available for English and Russian; other languages use label-matching only.
 
-Each match has a **confidence score** (0–1). The highest-confidence code is auto-copied to your clipboard.
+Each match has a **confidence score** (0–1). The highest-confidence code is auto-copied to your clipboard and auto-cleared after 30 seconds.
 
 ## Plugin system
 
@@ -215,14 +220,18 @@ After `pip install`, burnbox discovers your provider automatically.
 ## Security considerations
 
 - OTP codes transit through third-party email providers. Only use burnbox for non-sensitive verifications.
-- Session files are stored with 0600 permissions at `~/.config/burnbox/session.json`.
+- Session files are stored with 0600 permissions at `~/.config/burnbox/session.json`. The session file is deleted before the account is burned, minimizing credential exposure.
+- OTP codes are auto-cleared from the clipboard after 30 seconds. Clipboard managers may retain copied text.
+- Notifications show only "Verification code received" — OTP values are never sent to the notification system.
 - Accounts are deleted ("burned") on exit by default. Use `--keep` only if you need persistence.
+- GuerrillaMail does not support true account deletion; `forget_me` abandons the session but emails may persist on the server for up to 1 hour.
 
 ## Troubleshooting
 
-- **Clipboard not working on Linux**: Install `xclip` or `xsel` (X11) or `wl-clipboard` (Wayland).
+- **Clipboard not working on Linux**: Install `xclip` or `xsel` (X11) or `wl-clipboard` (Wayland). burnbox detects Wayland automatically and uses `wl-copy` first.
 - **All providers down**: burnbox falls back to trying providers even if health checks fail. Check your network.
 - **"Session expired" on resume**: The temp email account has expired. Start a new one with `burnbox`.
+- **"Guerrilla Mail forget_me failed"**: The GuerrillaMail API may be temporarily unavailable. The session is still abandoned locally.
 
 ## Development
 

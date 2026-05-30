@@ -7,12 +7,6 @@ from burnbox.providers.mailtm import MailTmProvider
 from burnbox.exceptions import NoDomainsError, ProviderError
 
 
-@pytest.fixture
-def mock_async_client():
-    client = AsyncMock()
-    return client
-
-
 class TestSession:
     def test_session_fields(self):
         s = Session(
@@ -194,7 +188,7 @@ class TestGuerrillaMailProvider:
     async def test_is_alive_success(self, mock_async_client):
         addr_resp = MagicMock()
         addr_resp.json.return_value = {"email_addr": "test@sharklasers.com", "sid_token": "abc"}
-        addr_resp.raise_for_status = MagicMock()
+        addr_resp.status_code = 200
         mock_async_client.get = AsyncMock(return_value=addr_resp)
         p = GuerrillaMailProvider(client=mock_async_client)
         assert await p.is_alive() is True
@@ -301,19 +295,33 @@ class TestGuerrillaMailProvider:
             await p.fetch_messages(seen_ids=set())
 
     @pytest.mark.asyncio
-    async def test_delete_account(self, mock_async_client):
+    async def test_delete_account_calls_forget_me(self, mock_async_client):
         forget_resp = MagicMock()
         forget_resp.json.return_value = {"success": True}
         forget_resp.raise_for_status = MagicMock()
         mock_async_client.get = AsyncMock(return_value=forget_resp)
         p = GuerrillaMailProvider(client=mock_async_client)
-        p._address = "test@sharklasers.com"
+        p._sid_token = "sid123"
         result = await p.delete_account("sid123")
         assert result is True
+        call_args = mock_async_client.get.call_args
+        assert call_args is not None
+        params = call_args[1].get("params") or call_args[0][0] if call_args[0] else {}
+        if isinstance(params, dict):
+            assert params.get("f") == "forget_me"
 
     @pytest.mark.asyncio
-    async def test_delete_account_best_effort(self, mock_async_client):
+    async def test_delete_account_no_sid_token(self, mock_async_client):
         p = GuerrillaMailProvider(client=mock_async_client)
+        result = await p.delete_account("sid123")
+        assert result is True
+        mock_async_client.get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_delete_account_forget_me_failure_still_returns_true(self, mock_async_client):
+        mock_async_client.get = AsyncMock(side_effect=Exception("network error"))
+        p = GuerrillaMailProvider(client=mock_async_client)
+        p._sid_token = "sid123"
         result = await p.delete_account("sid123")
         assert result is True
 

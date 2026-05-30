@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 _ENTRY_POINT_GROUP = "burnbox.providers"
 
 
+_HEALTH_CHECK_TIMEOUT = 5.0
+
+
 class ProviderRegistry:
     def __init__(self) -> None:
         self._providers: dict[str, Provider] = {}
@@ -68,7 +71,8 @@ async def select_provider(
                 break
 
     results = await asyncio.gather(
-        *[p.is_alive() for p in providers], return_exceptions=True
+        *[asyncio.wait_for(p.is_alive(), timeout=_HEALTH_CHECK_TIMEOUT) for p in providers],
+        return_exceptions=True,
     )
     for provider, alive in zip(providers, results):
         if isinstance(alive, Exception):

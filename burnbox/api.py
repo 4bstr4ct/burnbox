@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import replace
 from typing import AsyncIterator
 
@@ -14,6 +15,8 @@ from burnbox.providers.base import Provider
 from burnbox.providers.registry import select_provider
 from burnbox.providers.utils import build_registry
 from burnbox.session import SessionStore
+
+logger = logging.getLogger(__name__)
 
 
 async def _select(config: AppConfig) -> Provider:
@@ -158,12 +161,12 @@ class BurnBox:
     async def __aexit__(self, *args: object) -> None:
         try:
             await self.burn()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to burn account on exit: %s", exc)
         try:
             await self._provider.aclose()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to close provider on exit: %s", exc)
 
 
 async def create(

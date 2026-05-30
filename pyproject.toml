@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "burnbox"
-version = "1.0.0"
+version = "1.1.0"
 description = "Temporary email that burns after reading"
 requires-python = ">=3.10"
 license = "MIT"

@@ -54,12 +54,16 @@ class BurnBoxClient:
         return await self._provider.fetch_messages(seen_ids)
 
     async def burn(self) -> bool:
-        """Delete the account and session file. Returns True if successful."""
+        """Delete the account and session file. Returns True if deletion succeeded."""
         if not self._session:
             return False
-        result = await self._provider.delete_account(self._session.account_id)
-        if result:
-            self._store.delete()
+        account_id = self._session.account_id
+        provider_name = self._session.provider_name
+        self._store.delete()
+        logger.info("Session file deleted (provider=%s, account=%s...)", provider_name, account_id[:8])
+        result = await self._provider.delete_account(account_id)
+        if not result:
+            logger.warning("Provider %s failed to delete account %s", provider_name, account_id)
         return result
 
     @property
