@@ -10,12 +10,11 @@ _ALPHANUMERIC_LABELED = re.compile(
     r"[:\s]*([A-Za-z0-9\-_]{4,32})",
     re.IGNORECASE,
 )
-_ALPHANUMERIC_GENERIC = re.compile(r"\b([A-Z0-9]{4,8}-[A-Z0-9]{4,8}(?:-[A-Z0-9]{4,8})+)\b")
-_ALPHANUMERIC_SIMPLE = re.compile(r"\b([A-Z0-9]{6,12})\b")
+_ALPHANUMERIC_GENERIC = re.compile(r"\b([A-Za-z0-9]{4,8}-[A-Za-z0-9]{4,8}(?:-[A-Za-z0-9]{4,8})*)\b")
+_ALPHANUMERIC_SIMPLE = re.compile(r"\b([A-Za-z0-9]{6,12})\b")
 _PROXIMITY = 80
 _BASE_CONFIDENCE = 0.5
 _LABELED_CONFIDENCE = 0.85
-_GENERIC_CONFIDENCE = 0.4
 
 _BOOST_FLAT: list[re.Pattern[str]] = []
 for _lang, words in CONTEXT_BOOST_WORDS.items():
@@ -64,13 +63,10 @@ class AlphanumericOtpParser:
         for m in _ALPHANUMERIC_SIMPLE.finditer(text):
             value = m.group(1)
             if value not in seen_values:
-                conf = _GENERIC_CONFIDENCE
                 window_start = max(0, m.start() - _PROXIMITY)
                 window_end = min(len(lower_text), m.end() + _PROXIMITY)
                 window = lower_text[window_start:window_end]
-                if any(p.search(window) for p in _BOOST_FLAT):
-                    conf = _BASE_CONFIDENCE
-                else:
+                if not any(p.search(window) for p in _BOOST_FLAT):
                     continue
                 matches.append(CodeMatch(
                     value=value,
@@ -78,7 +74,7 @@ class AlphanumericOtpParser:
                     end=m.end(1),
                     kind="alphanumeric_otp",
                     source_parser=self.name,
-                    confidence=conf,
+                    confidence=_BASE_CONFIDENCE,
                 ))
                 seen_values.add(value)
 

@@ -14,7 +14,7 @@ from rich.text import Text
 from burnbox import __version__
 from burnbox.client import BurnBoxClient
 from burnbox.config import AppConfig, load_config
-from burnbox.detectors import copy_to_clipboard, copy_to_clipboard_auto_clear, detect_codes, detect_links, extract_best_code, MessageContext
+from burnbox.detectors import async_copy_to_clipboard, copy_to_clipboard_auto_clear, detect_codes, detect_links, extract_best_code, MessageContext
 from burnbox.exceptions import AuthExpiredError, BurnBoxError, SessionError
 from burnbox.models import InboxMessage
 from burnbox.notifications import send_notification
@@ -56,8 +56,7 @@ def _render_message(msg: InboxMessage, config: AppConfig) -> str | None:
     header.append("Subject: ", style="bold yellow")
     header.append(msg.subject)
 
-    escaped = msg.content.replace("[", "\\[").replace("]", "\\]")
-    content_parts: list[Text] = [Text(escaped)]
+    content_parts: list[Text] = [Text(msg.content)]
     codes = detect_codes(msg.content, MessageContext(sender=msg.sender, subject=msg.subject))
     links = detect_links(msg.content)
     best: str | None = None
@@ -65,8 +64,6 @@ def _render_message(msg: InboxMessage, config: AppConfig) -> str | None:
     if codes and config.copy_code:
         best = extract_best_code(codes)
         if best:
-            copy_to_clipboard(best)
-            logger.info("OTP detected: %s", best)
             content_parts.append(Text.from_markup(f"\n  [dim]Copied code: {best}[/dim]"))
             if config.notifications:
                 send_notification("burnbox", "Verification code received")
@@ -138,6 +135,7 @@ async def _poll_loop(client: BurnBoxClient, config: AppConfig) -> None:
                             last_code = code
                         seen_ids.add(mail.id)
                     if last_code:
+                        await async_copy_to_clipboard(last_code)
                         await copy_to_clipboard_auto_clear(last_code)
                     status.update(f"burnbox: waiting for drops... [dim]({len(seen_ids)} seen)[/dim]")
                     status.start()
@@ -212,8 +210,14 @@ def main(
 
     config = load_config()
     if poll is not None:
+        if poll < 0.5:
+            console.print("[bold red]--poll must be >= 0.5[/bold red]")
+            raise typer.Exit(1)
         config = replace(config, poll_interval=poll)
     if timeout is not None:
+        if timeout < 1.0:
+            console.print("[bold red]--timeout must be >= 1.0[/bold red]")
+            raise typer.Exit(1)
         config = replace(config, timeout=timeout)
     if provider is not None:
         config = replace(config, provider_default=provider)
@@ -242,7 +246,7 @@ async def _run(config: AppConfig, keep: bool) -> None:
         console.print(f"  [bold]Provider:[/bold] {provider.name}")
         console.print(f"  [bold]Address:[/bold]  [green]{session.address}[/green]")
         if config.copy_address:
-            copy_to_clipboard(session.address)
+            await async_copy_to_clipboard(session.address)
             console.print("[dim]  Address copied to clipboard[/dim]")
         console.print()
         console.print("[dim]  Ctrl+C to exit and burn · --keep to preserve · burnbox resume[/dim]\n")
@@ -298,7 +302,7 @@ async def _run_address(config: AppConfig) -> None:
         session = await client.register()
         console.print(f"[green]{session.address}[/green]")
         if config.copy_address:
-            copy_to_clipboard(session.address)
+            await async_copy_to_clipboard(session.address)
             console.print("[dim]Address copied to clipboard.[/dim]")
     except KeyboardInterrupt:
         pass

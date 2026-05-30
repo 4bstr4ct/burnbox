@@ -10,7 +10,7 @@ from burnbox.models import InboxMessage, Session
 @pytest.fixture
 def mock_session_store(tmp_path):
     from burnbox.session import SessionStore
-    return SessionStore(dir=tmp_path)
+    return SessionStore(store_dir=tmp_path)
 
 
 class TestMessage:

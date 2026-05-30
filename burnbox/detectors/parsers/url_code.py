@@ -3,11 +3,10 @@ from __future__ import annotations
 import re
 from urllib.parse import parse_qs, urlparse
 
-from burnbox.detectors.base import CodeMatch, MessageContext
+from burnbox.detectors.base import CodeMatch, LINK_PATTERN, MessageContext
 from burnbox.detectors.i18n import URL_CODE_PARAMS
 
-_LINK_PATTERN = re.compile(r"https?://[^\s<>\"']+")
-_CODE_VALUE_RE = re.compile(r"^[A-Za-z0-9\-_.]{3,64}$")
+_CODE_VALUE_RE = re.compile(r"^[A-Za-z0-9\-_.+/=]{3,64}$")
 _NUMERIC_VALUE_RE = re.compile(r"^\d{4,8}$")
 
 
@@ -22,7 +21,7 @@ class UrlCodeParser:
         matches: list[CodeMatch] = []
         seen_values: set[str] = set()
 
-        for m in _LINK_PATTERN.finditer(text):
+        for m in LINK_PATTERN.finditer(text):
             url_str = m.group(0)
             try:
                 parsed = urlparse(url_str)

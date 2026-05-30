@@ -22,7 +22,7 @@ class TestFullFlow:
         provider.fetch_messages.return_value = [msg]
         provider.delete_account.return_value = True
 
-        store = SessionStore(dir=tmp_path)
+        store = SessionStore(store_dir=tmp_path)
         config = AppConfig(copy_address=False)
         client = BurnBoxClient(provider=provider, session_store=store, config=config)
 
@@ -53,7 +53,7 @@ class TestFullFlow:
         provider.fetch_messages.return_value = []
         provider.delete_account.return_value = True
 
-        store = SessionStore(dir=tmp_path)
+        store = SessionStore(store_dir=tmp_path)
         config = AppConfig(copy_address=False)
         client = BurnBoxClient(provider=provider, session_store=store, config=config)
 

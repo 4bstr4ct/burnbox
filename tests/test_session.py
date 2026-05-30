@@ -43,7 +43,7 @@ class TestSession:
 
 class TestSessionStore:
     def test_save_and_load(self, tmp_path):
-        store = SessionStore(dir=tmp_path)
+        store = SessionStore(store_dir=tmp_path)
         s = Session(address="a@b.c", account_id="1", token="tok",
                      provider_name="mailtm", created_at=100.0)
         store.save(s)
@@ -54,11 +54,11 @@ class TestSessionStore:
         assert loaded.provider_name == "mailtm"
 
     def test_load_missing_returns_none(self, tmp_path):
-        store = SessionStore(dir=tmp_path)
+        store = SessionStore(store_dir=tmp_path)
         assert store.load() is None
 
     def test_delete(self, tmp_path):
-        store = SessionStore(dir=tmp_path)
+        store = SessionStore(store_dir=tmp_path)
         s = Session(address="a@b.c", account_id="1", token="tok",
                      provider_name="mailtm", created_at=100.0)
         store.save(s)
@@ -66,7 +66,7 @@ class TestSessionStore:
         assert store.load() is None
 
     def test_file_permissions(self, tmp_path):
-        store = SessionStore(dir=tmp_path)
+        store = SessionStore(store_dir=tmp_path)
         s = Session(address="a@b.c", account_id="1", token="tok",
                      provider_name="mailtm", created_at=100.0)
         store.save(s)
@@ -74,7 +74,7 @@ class TestSessionStore:
         assert mode == 0o600
 
     def test_no_password_in_saved_file(self, tmp_path):
-        store = SessionStore(dir=tmp_path)
+        store = SessionStore(store_dir=tmp_path)
         s = Session(address="a@b.c", account_id="1", token="tok",
                      provider_name="mailtm", created_at=100.0)
         store.save(s)
@@ -83,16 +83,16 @@ class TestSessionStore:
 
     def test_load_corrupt_json(self, tmp_path):
         (tmp_path / "session.json").write_text("not json{{{")
-        store = SessionStore(dir=tmp_path)
+        store = SessionStore(store_dir=tmp_path)
         assert store.load() is None
 
     def test_load_missing_required_keys(self, tmp_path):
         (tmp_path / "session.json").write_text(json.dumps({"address": "x@y.z"}))
-        store = SessionStore(dir=tmp_path)
+        store = SessionStore(store_dir=tmp_path)
         assert store.load() is None
 
     def test_atomic_write_no_partial(self, tmp_path):
-        store = SessionStore(dir=tmp_path)
+        store = SessionStore(store_dir=tmp_path)
         s = Session(address="a@b.c", account_id="1", token="tok",
                      provider_name="mailtm", created_at=100.0)
         store.save(s)

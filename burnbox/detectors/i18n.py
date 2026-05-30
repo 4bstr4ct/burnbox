@@ -107,6 +107,41 @@ CONTEXT_BOOST_WORDS: dict[str, list[str]] = {
     ],
     "ru": [
         "подтверд", "верификац", "авторизац", "войти", "регистрац", "активир",
+        "смс-код", "код доступ",
+    ],
+    "de": [
+        "bestätig", "verifizier", "authentifizier", "anmeld", "registrier",
+        "aktivier", "sms-code", "zugangscode",
+    ],
+    "fr": [
+        "vérif", "authentif", "connect", "inscriv", "confirm", "activ",
+        "code d'accès", "sms",
+    ],
+    "es": [
+        "verific", "autentic", "iniciar sesi", "registr", "confirm", "activ",
+        "código de acceso",
+    ],
+    "pt": [
+        "verific", "autentic", "entrar", "registr", "confirm", "ativ",
+        "código de acesso",
+    ],
+    "zh": [
+        "验证", "认证", "登录", "注册", "确认", "激活",
+    ],
+    "ja": [
+        "認証", "確認", "ログイン", "登録", "アクティベート",
+    ],
+    "ko": [
+        "인증", "확인", "로그인", "등록", "활성화",
+    ],
+    "hi": [
+        "सत्यापन", "प्रमाणीकरण", "लॉगिन", "पंजीकरण", "पुष्टि", "सक्रिय",
+    ],
+    "ar": [
+        "تحقق", "توثيق", "تسجيل دخول", "تسجيل", "تأكيد", "تفعيل",
+    ],
+    "tr": [
+        "doğrula", "kimlik doğrula", "giriş", "kaydol", "onayla", "etkinleştir",
     ],
 }
 

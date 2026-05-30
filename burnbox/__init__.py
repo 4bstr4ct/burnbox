@@ -1,6 +1,7 @@
 from burnbox.api import BurnBox, Message, create
 from burnbox.client import BurnBoxClient
 from burnbox.config import AppConfig, load_config
+from burnbox.detectors.base import CodeMatch, MessageContext
 from burnbox.exceptions import (
     APIError,
     AuthExpiredError,
@@ -10,9 +11,10 @@ from burnbox.exceptions import (
     SessionError,
     TokenError,
 )
-from burnbox.models import InboxMessage, MessagePreview, Session
+from burnbox.models import InboxMessage, Session
+from burnbox.providers.base import Provider
 
-__version__ = "1.0.0"
+__version__ = "1.2.0"
 
 __all__ = [
     "BurnBox",
@@ -24,11 +26,13 @@ __all__ = [
     "BurnBoxError",
     "Session",
     "InboxMessage",
-    "MessagePreview",
     "APIError",
     "NoDomainsError",
     "ProviderError",
     "SessionError",
     "TokenError",
     "AuthExpiredError",
+    "Provider",
+    "CodeMatch",
+    "MessageContext",
 ]

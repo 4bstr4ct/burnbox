@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import logging
+import random
 from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
 
@@ -43,7 +44,8 @@ _attempt_var: contextvars.ContextVar[int] = contextvars.ContextVar("_attempt_var
 
 
 def _delay_for_attempt(attempt: int, cfg: RetryConfig) -> float:
-    return float(min(cfg.base_delay * (2 ** (attempt - 1)), cfg.max_delay))
+    delay = float(min(cfg.base_delay * (2 ** (attempt - 1)), cfg.max_delay))
+    return delay * random.uniform(0.5, 1.0)
 
 
 class _Retryable(Exception):

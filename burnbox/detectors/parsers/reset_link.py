@@ -3,10 +3,8 @@ from __future__ import annotations
 import re
 from urllib.parse import urlparse
 
-from burnbox.detectors.base import CodeMatch, MessageContext
+from burnbox.detectors.base import CodeMatch, LINK_PATTERN, MessageContext
 from burnbox.detectors.i18n import RESET_PATH_SEGMENTS
-
-_LINK_PATTERN = re.compile(r"https?://[^\s<>\"']+")
 _RESET_PATH_RE = re.compile(
     r"(?:/|^)(?:" + "|".join(re.escape(s) for s in RESET_PATH_SEGMENTS) + r")(?:/|$)",
     re.IGNORECASE,
@@ -24,7 +22,7 @@ class ResetLinkParser:
         matches: list[CodeMatch] = []
         seen_urls: set[str] = set()
 
-        for m in _LINK_PATTERN.finditer(text):
+        for m in LINK_PATTERN.finditer(text):
             url_str = m.group(0)
             if url_str in seen_urls:
                 continue

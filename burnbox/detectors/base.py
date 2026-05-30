@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
@@ -26,3 +27,6 @@ class CodeParser(Protocol):
     priority: int
 
     def parse(self, text: str, context: MessageContext) -> list[CodeMatch]: ...
+
+
+LINK_PATTERN = re.compile(r"https?://[^\s<>\"']+")

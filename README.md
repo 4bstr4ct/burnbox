@@ -173,7 +173,7 @@ burnbox detects verification codes from incoming emails using a multi-parser eng
 - **Reset/verify links** — Password reset, account verification URLs
 - **Numeric OTP** — Standalone digit clusters with context-aware confidence boosting
 
-Supports 12 languages for label detection: English, Russian, German, French, Spanish, Portuguese, Chinese, Japanese, Korean, Hindi, Arabic, Turkish. Context-aware confidence boosting is available for English and Russian; other languages use label-matching only.
+Supports 12 languages for label detection: English, Russian, German, French, Spanish, Portuguese, Chinese, Japanese, Korean, Hindi, Arabic, Turkish. Context-aware confidence boosting is available for all 12 languages.
 
 Each match has a **confidence score** (0–1). The highest-confidence code is auto-copied to your clipboard and auto-cleared after 30 seconds.
 
@@ -183,7 +183,7 @@ Add custom providers via Python entry points:
 
 ```python
 # my_provider.py
-from burnbox.providers.base import Provider
+from burnbox import Provider
 from burnbox.models import Session, InboxMessage
 
 class MyProvider:
@@ -220,8 +220,9 @@ After `pip install`, burnbox discovers your provider automatically.
 ## Security considerations
 
 - OTP codes transit through third-party email providers. Only use burnbox for non-sensitive verifications.
-- Session files are stored with 0600 permissions at `~/.config/burnbox/session.json`. The session file is deleted before the account is burned, minimizing credential exposure.
-- OTP codes are auto-cleared from the clipboard after 30 seconds. Clipboard managers may retain copied text.
+- Session files are stored with 0600 permissions at `~/.config/burnbox/session.json`. Files are created with restrictive permissions from the start (no exposure window).
+- The account is deleted before the session file is removed, so a failed burn can be retried.
+- OTP codes are auto-cleared from the clipboard after 30 seconds. An atexit handler also clears the clipboard on process termination. Clipboard managers may retain copied text.
 - Notifications show only "Verification code received" — OTP values are never sent to the notification system.
 - Accounts are deleted ("burned") on exit by default. Use `--keep` only if you need persistence.
 - GuerrillaMail does not support true account deletion; `forget_me` abandons the session but emails may persist on the server for up to 1 hour.

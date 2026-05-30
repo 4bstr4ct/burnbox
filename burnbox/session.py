@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import pathlib
-import stat
 import uuid
 from dataclasses import asdict
 
@@ -17,17 +16,23 @@ _SESSION_FILE = "session.json"
 
 
 class SessionStore:
-    def __init__(self, dir: pathlib.Path | None = None) -> None:
-        self._dir = dir or _DEFAULT_DIR
+    def __init__(self, store_dir: pathlib.Path | None = None) -> None:
+        self._dir = store_dir or _DEFAULT_DIR
         self._file = self._dir / _SESSION_FILE
 
     def save(self, session: Session) -> None:
-        self._dir.mkdir(parents=True, exist_ok=True)
-        os.chmod(self._dir, stat.S_IRWXU)
+        old_mask = os.umask(0o077)
+        try:
+            self._dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        finally:
+            os.umask(old_mask)
         data = asdict(session)
         tmp = self._dir / f"session.{uuid.uuid4().hex}.tmp"
-        tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-        os.chmod(tmp, stat.S_IRUSR | stat.S_IWUSR)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            os.write(fd, (json.dumps(data, indent=2) + "\n").encode("utf-8"))
+        finally:
+            os.close(fd)
         os.replace(tmp, self._file)
         logger.info("Session saved to %s", self._file)
 
@@ -75,5 +80,7 @@ class SessionStore:
         try:
             self._file.unlink()
             logger.info("Session file deleted: %s", self._file)
-        except OSError:
+        except FileNotFoundError:
             pass
+        except OSError as exc:
+            logger.warning("Failed to delete session file %s: %s", self._file, exc)

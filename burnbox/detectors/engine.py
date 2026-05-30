@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from burnbox.detectors.base import CodeMatch, CodeParser, MessageContext
+from burnbox.detectors.base import CodeMatch, CodeParser, LINK_PATTERN, MessageContext
 from burnbox.detectors.parsers import (
     AlphanumericOtpParser,
     LabeledOtpParser,
@@ -11,10 +11,8 @@ from burnbox.detectors.parsers import (
     UrlCodeParser,
 )
 
-_LINK_PATTERN = re.compile(r"https?://[^\s<>\"']+")
 
-
-def default_parsers() -> list[CodeParser]:
+def _default_parsers() -> list[CodeParser]:
     return [
         UrlCodeParser(),
         LabeledOtpParser(),
@@ -35,7 +33,7 @@ _EXPIRY_PATTERN = re.compile(
 
 class ParserEngine:
     def __init__(self, parsers: list[CodeParser] | None = None) -> None:
-        self._parsers = parsers or default_parsers()
+        self._parsers = parsers or _default_parsers()
 
     def parse(self, text: str, context: MessageContext | None = None) -> list[CodeMatch]:
         ctx = context or MessageContext()
@@ -60,7 +58,7 @@ class ParserEngine:
 
     @staticmethod
     def detect_links(text: str) -> list[str]:
-        return _LINK_PATTERN.findall(text)
+        return LINK_PATTERN.findall(text)
 
     @staticmethod
     def detect_expiry(text: str) -> str | None:

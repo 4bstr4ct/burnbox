@@ -4,12 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "burnbox"
-version = "1.1.0"
+version = "1.2.0"
 description = "Temporary email that burns after reading"
+readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{ name = "burnbox contributors" }]
 keywords = ["temp-mail", "temporary-email", "disposable-email", "otp", "cli"]
+urls = { Repository = "https://github.com/4bstr4ct/burnbox", Bug-Tracker = "https://github.com/4bstr4ct/burnbox/issues" }
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",

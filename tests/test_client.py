@@ -9,7 +9,7 @@ from burnbox.session import SessionStore
 
 @pytest.fixture
 def mock_session_store(tmp_path):
-    return SessionStore(dir=tmp_path)
+    return SessionStore(store_dir=tmp_path)
 
 
 class TestBurnBoxClient:
