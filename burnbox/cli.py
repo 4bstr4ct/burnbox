@@ -174,7 +174,7 @@ def main(
     ] = False,
     provider: Annotated[
         Optional[str],
-        typer.Option("--provider", help="Provider to use: mailtm, mailgw, dropmail, guerrillamail"),
+        typer.Option("--provider", help="Provider to use: mailtm, guerrillamail"),
     ] = None,
     version: Annotated[
         bool,
@@ -249,7 +249,7 @@ def address(
     ctx: typer.Context,
     provider: Annotated[
         Optional[str],
-        typer.Option("--provider", help="Provider to use: mailtm, mailgw, dropmail, guerrillamail"),
+        typer.Option("--provider", help="Provider to use: mailtm, guerrillamail"),
     ] = None,
 ) -> None:
     """Generate a temp email address and exit."""

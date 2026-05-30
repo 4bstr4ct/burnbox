@@ -19,7 +19,7 @@ class TestLoadConfig:
         config_file = tmp_path / "burnbox.toml"
         config_file.write_text("""
 [provider]
-default = "mailgw"
+default = "mailtm"
 custom_url = "https://my-mail.example.com"
 
 [polling]
@@ -30,27 +30,27 @@ copy_address = false
 copy_code = false
 """)
         cfg = load_config(config_path=config_file)
-        assert cfg.provider_default == "mailgw"
+        assert cfg.provider_default == "mailtm"
         assert cfg.custom_url == "https://my-mail.example.com"
         assert cfg.poll_interval == 3.0
         assert cfg.copy_address is False
         assert cfg.copy_code is False
 
     def test_env_override(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("BURNBOX_PROVIDER", "dropmail")
+        monkeypatch.setenv("BURNBOX_PROVIDER", "guerrillamail")
         monkeypatch.setenv("BURNBOX_POLL_INTERVAL", "2.0")
         cfg = load_config(config_path=tmp_path / "nonexistent.toml")
-        assert cfg.provider_default == "dropmail"
+        assert cfg.provider_default == "guerrillamail"
         assert cfg.poll_interval == 2.0
 
     def test_env_overrides_toml(self, tmp_path, monkeypatch):
         for key in ["BURNBOX_PROVIDER", "BURNBOX_CUSTOM_URL", "BURNBOX_POLL_INTERVAL", "BURNBOX_TIMEOUT"]:
             monkeypatch.delenv(key, raising=False)
-        monkeypatch.setenv("BURNBOX_PROVIDER", "dropmail")
+        monkeypatch.setenv("BURNBOX_PROVIDER", "guerrillamail")
         config_file = tmp_path / "burnbox.toml"
-        config_file.write_text('[provider]\ndefault = "mailgw"\n')
+        config_file.write_text('[provider]\ndefault = "mailtm"\n')
         cfg = load_config(config_path=config_file)
-        assert cfg.provider_default == "dropmail"
+        assert cfg.provider_default == "guerrillamail"
 
     def test_appconfig_frozen(self):
         cfg = AppConfig()

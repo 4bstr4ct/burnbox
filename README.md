@@ -62,7 +62,7 @@ That's it. You'll get a temp address, it auto-copies to clipboard, and burnbox w
 ### Options
 
 ```
---provider       Provider: mailtm, mailgw, dropmail, guerrillamail
+--provider       Provider: mailtm, guerrillamail
 --poll, -p       Polling interval in seconds (default: 5)
 --timeout, -t    HTTP request timeout (default: 10)
 --keep, -k       Keep account alive after exit
@@ -128,7 +128,7 @@ Config file: `~/.config/burnbox.toml`
 ```toml
 [provider]
 default = "mailtm"             # Preferred provider
-custom_url = "https://..."     # Custom API URL for mailtm/mailgw
+custom_url = "https://..."     # Custom API URL for mailtm
 
 [polling]
 interval = 5.0                 # Seconds between polls
@@ -154,11 +154,9 @@ BURNBOX_CUSTOM_URL=https://...
 | Provider | Auth | Delete account | Domains | Custom URL |
 |---|---|---|---|---|
 | **mail.tm** | Register + token | Yes | Multiple | Yes |
-| **mail.gw** | Register + token | Yes | Multiple | Yes |
-| **dropmail** | Session-based (auto-expire) | Session expires | dropmail.me, 10mail.org, etc | No |
 | **guerrillamail** | Session-based | Yes | sharklasers.com, grr.la, etc | No |
 
-burnbox automatically selects the first available provider with a health check. If one is down, it falls back to the next.
+burnbox automatically selects the first available provider with a health check. If one is down, it falls back to the next. You can also add custom providers via the plugin system.
 
 ## OTP Detection
 

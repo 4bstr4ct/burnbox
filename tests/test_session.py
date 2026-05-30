@@ -29,7 +29,7 @@ class TestSession:
 
     def test_repr_empty_token(self):
         s = Session(address="a@b.c", account_id="1", token="",
-                     provider_name="dropmail", created_at=100.0)
+                     provider_name="guerrillamail", created_at=100.0)
         r = repr(s)
         assert "(empty)" in r
 
