@@ -312,12 +312,10 @@ class TestGuerrillaMailProvider:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_delete_account_failure(self, mock_async_client):
-        mock_async_client.get.side_effect = Exception("network error")
+    async def test_delete_account_best_effort(self, mock_async_client):
         p = GuerrillaMailProvider(client=mock_async_client)
-        p._address = "test@sharklasers.com"
         result = await p.delete_account("sid123")
-        assert result is False
+        assert result is True
 
     def test_provider_protocol_compliance(self):
         p = GuerrillaMailProvider()

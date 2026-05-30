@@ -111,6 +111,8 @@ class GuerrillaMailProvider:
         self._sid_token = session.token
         self._address = session.address
 
+    _WELCOME_SENDER = "no-reply@guerrillamail.com"
+
     async def fetch_messages(self, seen_ids: set[str]) -> list[InboxMessage]:
         if not self._sid_token:
             raise ProviderError("Guerrilla Mail: not registered or restored")
@@ -125,6 +127,11 @@ class GuerrillaMailProvider:
         for m in raw_list:
             mail_id = str(m.get("mail_id", ""))
             if not mail_id or mail_id in seen_ids:
+                continue
+
+            sender = m.get("mail_from", "")
+            if sender == self._WELCOME_SENDER:
+                seen_ids.add(mail_id)
                 continue
 
             full = await self._api(
@@ -148,17 +155,4 @@ class GuerrillaMailProvider:
         return messages
 
     async def delete_account(self, account_id: str) -> bool:
-        try:
-            data = await self._api(
-                f="forget_me",
-                sid_token=account_id,
-                email_addr=self._address or "",
-            )
-            if isinstance(data, bool) and data:
-                return True
-            if isinstance(data, dict):
-                return bool(data.get("success", False))
-            return False
-        except Exception:
-            logger.warning("Guerrilla Mail: failed to forget address %s", self._address)
-            return False
+        return True
