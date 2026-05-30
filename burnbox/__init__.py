@@ -14,7 +14,7 @@ from burnbox.exceptions import (
 from burnbox.models import InboxMessage, Session
 from burnbox.providers.base import Provider
 
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 
 __all__ = [
     "BurnBox",

@@ -6,6 +6,8 @@ from burnbox.detectors.base import CodeMatch, MessageContext
 from burnbox.detectors.i18n import CONTEXT_BOOST_WORDS
 
 _GENERIC_OTP = re.compile(r"\b(\d{4,8})\b")
+_UUID_NEARBY = re.compile(r"[0-9a-fA-F]{4,12}-[0-9a-fA-F]{4,12}")
+_YEAR_RE = re.compile(r"^(?:19|20)\d{2}$")
 _PROXIMITY = 80
 
 _BOOST_FLAT: list[re.Pattern[str]] = []
@@ -39,10 +41,17 @@ class NumericOtpParser:
         matches: list[CodeMatch] = []
         seen_values: set[str] = set()
         lower_text = text.lower()
+        uuid_positions = [m.span() for m in _UUID_NEARBY.finditer(text)]
 
         for m in _GENERIC_OTP.finditer(text):
             value = m.group(1)
             if value in seen_values:
+                continue
+
+            if any(m.start() >= u_start - 2 and m.end() <= u_end + 2 for u_start, u_end in uuid_positions):
+                continue
+
+            if _YEAR_RE.match(value):
                 continue
 
             conf = self._base

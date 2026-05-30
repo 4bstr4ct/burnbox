@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import html as _html
 import logging
 from dataclasses import replace
 from typing import Annotated, Optional
@@ -57,37 +58,59 @@ def _render_message(msg: InboxMessage, config: AppConfig) -> str | None:
     header.append("Subject: ", style="bold yellow")
     header.append(msg.subject)
 
-    content_parts: list[Text] = [Text(msg.content)]
-    codes = detect_codes(msg.content, MessageContext(sender=msg.sender, subject=msg.subject))
-    links = detect_links(msg.content)
-    best: str | None = None
-
-    if codes and config.copy_code:
-        best = extract_best_code(codes)
-        if best:
-            content_parts.append(Text.from_markup(f"\n  [dim]Copied code: {best}[/dim]"))
-            if config.notifications:
-                send_notification("burnbox", "Verification code received")
-
-    if codes:
-        top_codes = sorted(codes, key=lambda c: c.confidence, reverse=True)[:_MAX_DISPLAY_CODES]
-        code_str = ", ".join(c.value for c in top_codes)
-        extra = f" (+{len(codes) - _MAX_DISPLAY_CODES} more)" if len(codes) > _MAX_DISPLAY_CODES else ""
-        content_parts.append(Text.from_markup(f"\n  [bold green]Codes: {code_str}{extra}[/bold green]"))
-    if links:
-        content_parts.append(Text.from_markup(f"\n  [bold blue]Links: {len(links)} found[/bold blue]"))
-
-    combined = Text()
-    for part in content_parts:
-        combined.append(part)
-
-    panel = Panel(
-        combined,
+    msg_panel = Panel(
+        Text(_html.unescape(msg.content)),
         title=header,
         border_style="red",
         padding=(1, 2),
     )
-    console.print(panel)
+    console.print(msg_panel)
+
+    codes = detect_codes(msg.content, MessageContext(sender=msg.sender, subject=msg.subject))
+    links = detect_links(msg.content)
+    best: str | None = None
+
+    otp_codes = [c for c in codes if c.kind != "reset_link"]
+    reset_links = [c for c in codes if c.kind == "reset_link"]
+
+    if otp_codes and config.copy_code:
+        best = extract_best_code(codes)
+        if best:
+            if config.notifications:
+                send_notification("burnbox", "Verification code received")
+
+    if otp_codes or reset_links:
+        detected_parts: list[Text] = []
+        if otp_codes:
+            top = sorted(otp_codes, key=lambda c: c.confidence, reverse=True)[:_MAX_DISPLAY_CODES]
+            code_values = ", ".join(c.value for c in top)
+            code_line = f"Code: {code_values}"
+            if best and config.copy_code:
+                code_line += " (copied, clears in 30s)"
+            detected_parts.append(Text.from_markup(f"[bold green]{code_line}[/bold green]"))
+            if len(otp_codes) > _MAX_DISPLAY_CODES:
+                detected_parts.append(Text.from_markup(f"[dim]  +{len(otp_codes) - _MAX_DISPLAY_CODES} more[/dim]"))
+        if reset_links:
+            n_links = len(reset_links)
+            link_word = "link" if n_links == 1 else "links"
+            detected_parts.append(Text.from_markup(f"[bold blue]Link: {n_links} verification {link_word}[/bold blue]"))
+        elif links:
+            detected_parts.append(Text.from_markup(f"[bold blue]Link: {len(links)} found[/bold blue]"))
+
+        combined = Text()
+        for i, part in enumerate(detected_parts):
+            if i > 0:
+                combined.append("\n")
+            combined.append(part)
+
+        detected_panel = Panel(
+            combined,
+            title="[bold]Detected[/bold]",
+            border_style="green",
+            padding=(0, 1),
+        )
+        console.print(detected_panel)
+
     return best
 
 
