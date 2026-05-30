@@ -8,10 +8,10 @@ logger = logging.getLogger(__name__)
 
 
 def build_registry(custom_url: str | None = None) -> ProviderRegistry:
+    from burnbox.providers.dropmail import DropMailProvider
     from burnbox.providers.guerrillamail import GuerrillaMailProvider
     from burnbox.providers.mailgw import MailGwProvider
     from burnbox.providers.mailtm import MailTmProvider
-    from burnbox.providers.onesecmail import OneSecMailProvider
 
     registry = ProviderRegistry()
     if custom_url:
@@ -19,7 +19,7 @@ def build_registry(custom_url: str | None = None) -> ProviderRegistry:
     else:
         registry.register(MailTmProvider())
     registry.register(MailGwProvider())
-    registry.register(OneSecMailProvider())
+    registry.register(DropMailProvider())
     registry.register(GuerrillaMailProvider())
     registry.discover_plugins()
     return registry

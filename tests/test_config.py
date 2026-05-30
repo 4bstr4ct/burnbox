@@ -37,20 +37,20 @@ copy_code = false
         assert cfg.copy_code is False
 
     def test_env_override(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("BURNBOX_PROVIDER", "1secmail")
+        monkeypatch.setenv("BURNBOX_PROVIDER", "dropmail")
         monkeypatch.setenv("BURNBOX_POLL_INTERVAL", "2.0")
         cfg = load_config(config_path=tmp_path / "nonexistent.toml")
-        assert cfg.provider_default == "1secmail"
+        assert cfg.provider_default == "dropmail"
         assert cfg.poll_interval == 2.0
 
     def test_env_overrides_toml(self, tmp_path, monkeypatch):
         for key in ["BURNBOX_PROVIDER", "BURNBOX_CUSTOM_URL", "BURNBOX_POLL_INTERVAL", "BURNBOX_TIMEOUT"]:
             monkeypatch.delenv(key, raising=False)
-        monkeypatch.setenv("BURNBOX_PROVIDER", "1secmail")
+        monkeypatch.setenv("BURNBOX_PROVIDER", "dropmail")
         config_file = tmp_path / "burnbox.toml"
         config_file.write_text('[provider]\ndefault = "mailgw"\n')
         cfg = load_config(config_path=config_file)
-        assert cfg.provider_default == "1secmail"
+        assert cfg.provider_default == "dropmail"
 
     def test_appconfig_frozen(self):
         cfg = AppConfig()

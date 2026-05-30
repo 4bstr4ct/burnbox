@@ -2,10 +2,10 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 from burnbox.providers.base import Provider
 from burnbox.models import Session
+from burnbox.providers.dropmail import DropMailProvider
 from burnbox.providers.guerrillamail import GuerrillaMailProvider
 from burnbox.providers.mailgw import MailGwProvider
 from burnbox.providers.mailtm import MailTmProvider
-from burnbox.providers.onesecmail import OneSecMailProvider
 from burnbox.exceptions import AuthExpiredError, NoDomainsError, ProviderError
 
 
@@ -203,45 +203,164 @@ class TestMailGwProvider:
         assert await p.is_alive() is True
 
 
-class TestOneSecMailProvider:
+class TestDropMailProvider:
     def test_name(self):
-        p = OneSecMailProvider()
-        assert p.name == "1secmail"
+        p = DropMailProvider()
+        assert p.name == "dropmail"
 
     def test_supports_custom_url(self):
-        p = OneSecMailProvider()
+        p = DropMailProvider()
         assert p.supports_custom_url is False
 
     @pytest.mark.asyncio
-    async def test_is_alive(self, mock_async_client):
-        mock_async_client.get.return_value = MagicMock(status_code=200)
-        p = OneSecMailProvider(client=mock_async_client)
+    async def test_is_alive_success(self, mock_async_client):
+        graphql_resp = MagicMock()
+        graphql_resp.json.return_value = {
+            "data": {"domains": [{"id": "RG9tYWluOjE="}]}
+        }
+        graphql_resp.raise_for_status = MagicMock()
+        mock_async_client.post = AsyncMock(return_value=graphql_resp)
+        p = DropMailProvider(client=mock_async_client)
         assert await p.is_alive() is True
 
     @pytest.mark.asyncio
+    async def test_is_alive_failure(self, mock_async_client):
+        mock_async_client.post.side_effect = Exception("connection error")
+        p = DropMailProvider(client=mock_async_client)
+        assert await p.is_alive() is False
+
+    @pytest.mark.asyncio
     async def test_register(self, mock_async_client):
-        gen_resp = MagicMock()
-        gen_resp.json.return_value = ["1secmail.com", "1secmail.org"]
-        gen_resp.raise_for_status = MagicMock()
-        mock_async_client.get = AsyncMock(return_value=gen_resp)
-        p = OneSecMailProvider(client=mock_async_client)
+        graphql_resp = MagicMock()
+        graphql_resp.json.return_value = {
+            "data": {
+                "introduceSession": {
+                    "id": "U2Vzc2lvbjoxMjM=",
+                    "expiresAt": "2026-05-30T05:00:00+00:00",
+                    "addresses": [{"address": "test@dropmail.me"}],
+                }
+            }
+        }
+        graphql_resp.raise_for_status = MagicMock()
+        mock_async_client.post = AsyncMock(return_value=graphql_resp)
+        p = DropMailProvider(client=mock_async_client)
         session = await p.register()
-        assert session.address.endswith("@1secmail.com") or session.address.endswith("@1secmail.org")
-        assert session.provider_name == "1secmail"
-        assert session.token == ""
+        assert isinstance(session, Session)
+        assert session.address.endswith("@dropmail.me")
+        assert session.provider_name == "dropmail"
+        assert session.token == "U2Vzc2lvbjoxMjM="
+
+    @pytest.mark.asyncio
+    async def test_register_no_address(self, mock_async_client):
+        graphql_resp = MagicMock()
+        graphql_resp.json.return_value = {
+            "data": {"introduceSession": {"id": "abc", "addresses": []}}
+        }
+        graphql_resp.raise_for_status = MagicMock()
+        mock_async_client.post = AsyncMock(return_value=graphql_resp)
+        p = DropMailProvider(client=mock_async_client)
+        with pytest.raises(NoDomainsError, match="no address"):
+            await p.register()
+
+    @pytest.mark.asyncio
+    async def test_fetch_messages(self, mock_async_client):
+        p = DropMailProvider(client=mock_async_client)
+        p._session_id = "U2Vzc2lvbjoxMjM="
+
+        graphql_resp = MagicMock()
+        graphql_resp.json.return_value = {
+            "data": {
+                "session": {
+                    "mails": [
+                        {
+                            "id": "msg1",
+                            "fromAddr": "sender@test.com",
+                            "headerSubject": "Hello",
+                            "text": "Your code is 9999",
+                            "html": None,
+                        }
+                    ]
+                }
+            }
+        }
+        graphql_resp.raise_for_status = MagicMock()
+        mock_async_client.post = AsyncMock(return_value=graphql_resp)
+        messages = await p.fetch_messages(seen_ids=set())
+        assert len(messages) == 1
+        assert messages[0].sender == "sender@test.com"
+        assert "9999" in messages[0].content
+
+    @pytest.mark.asyncio
+    async def test_fetch_messages_filters_seen(self, mock_async_client):
+        p = DropMailProvider(client=mock_async_client)
+        p._session_id = "U2Vzc2lvbjoxMjM="
+
+        graphql_resp = MagicMock()
+        graphql_resp.json.return_value = {
+            "data": {
+                "session": {
+                    "mails": [
+                        {"id": "msg1", "fromAddr": "a@b.c", "headerSubject": "Old", "text": "old", "html": None},
+                        {"id": "msg2", "fromAddr": "c@d.c", "headerSubject": "New", "text": "new", "html": None},
+                    ]
+                }
+            }
+        }
+        graphql_resp.raise_for_status = MagicMock()
+        mock_async_client.post = AsyncMock(return_value=graphql_resp)
+        messages = await p.fetch_messages(seen_ids={"msg1"})
+        assert len(messages) == 1
+        assert messages[0].id == "msg2"
+
+    @pytest.mark.asyncio
+    async def test_fetch_messages_not_registered(self, mock_async_client):
+        p = DropMailProvider(client=mock_async_client)
+        with pytest.raises(AuthExpiredError, match="not registered"):
+            await p.fetch_messages(seen_ids=set())
+
+    @pytest.mark.asyncio
+    async def test_fetch_messages_session_expired(self, mock_async_client):
+        p = DropMailProvider(client=mock_async_client)
+        p._session_id = "expired-id"
+
+        graphql_resp = MagicMock()
+        graphql_resp.json.return_value = {
+            "data": {"session": None},
+            "errors": [{"extensions": {"code": "SESSION_NOT_FOUND"}, "message": "session_not_found"}],
+        }
+        graphql_resp.raise_for_status = MagicMock()
+        mock_async_client.post = AsyncMock(return_value=graphql_resp)
+        with pytest.raises(AuthExpiredError, match="session expired"):
+            await p.fetch_messages(seen_ids=set())
 
     @pytest.mark.asyncio
     async def test_delete_always_true(self, mock_async_client):
-        p = OneSecMailProvider(client=mock_async_client)
+        p = DropMailProvider(client=mock_async_client)
         result = await p.delete_account("any")
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_restore_invalid_address(self, mock_async_client):
-        p = OneSecMailProvider(client=mock_async_client)
-        session = Session(address="no-at-sign", account_id="1", token="", provider_name="1secmail", created_at=0.0)
-        with pytest.raises(AuthExpiredError, match="Invalid address"):
-            await p.restore(session)
+    async def test_restore(self, mock_async_client):
+        p = DropMailProvider(client=mock_async_client)
+        session = Session(
+            address="test@dropmail.me", account_id="sid1",
+            token="sid1", provider_name="dropmail", created_at=0.0,
+        )
+        await p.restore(session)
+        assert p._session_id == "sid1"
+        assert p._address == "test@dropmail.me"
+
+    def test_provider_protocol_compliance(self):
+        p = DropMailProvider()
+        assert isinstance(p, Provider)
+
+    @pytest.mark.asyncio
+    async def test_context_manager(self, mock_async_client):
+        mock_async_client.aclose = AsyncMock()
+        p = DropMailProvider(client=mock_async_client)
+        async with p:
+            pass
+        mock_async_client.aclose.assert_called_once()
 
 
 class TestGuerrillaMailProvider:

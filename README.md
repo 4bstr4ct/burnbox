@@ -62,7 +62,7 @@ That's it. You'll get a temp address, it auto-copies to clipboard, and burnbox w
 ### Options
 
 ```
---provider       Provider: mailtm, mailgw, 1secmail, guerrillamail
+--provider       Provider: mailtm, mailgw, dropmail, guerrillamail
 --poll, -p       Polling interval in seconds (default: 5)
 --timeout, -t    HTTP request timeout (default: 10)
 --keep, -k       Keep account alive after exit
@@ -155,7 +155,7 @@ BURNBOX_CUSTOM_URL=https://...
 |---|---|---|---|---|
 | **mail.tm** | Register + token | Yes | Multiple | Yes |
 | **mail.gw** | Register + token | Yes | Multiple | Yes |
-| **1secmail** | None (stateless) | Auto-expire | Dynamic (via API) | No |
+| **dropmail** | Session-based (auto-expire) | Session expires | dropmail.me, 10mail.org, etc | No |
 | **guerrillamail** | Session-based | Yes | sharklasers.com, grr.la, etc | No |
 
 burnbox automatically selects the first available provider with a health check. If one is down, it falls back to the next.
