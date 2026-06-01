@@ -5,13 +5,11 @@ import os
 import pathlib
 import sys
 from dataclasses import dataclass
-from urllib.parse import urlparse
 
 from typing import Any
 
-import ipaddress
-
 from burnbox.exceptions import BurnBoxError
+from burnbox.security import validate_url
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -28,30 +26,7 @@ _MIN_TIMEOUT = 1.0
 
 
 def _validate_url(url: str) -> str:
-    parsed = urlparse(url)
-    if parsed.scheme not in ("https", "http"):
-        raise BurnBoxError(
-            f"Invalid BURNBOX_CUSTOM_URL scheme {parsed.scheme!r}: only https/http allowed"
-        )
-    if not parsed.hostname:
-        raise BurnBoxError(f"Invalid BURNBOX_CUSTOM_URL: no hostname in {url!r}")
-    hostname = parsed.hostname
-    if hostname in ("localhost", "127.0.0.1", "::1"):
-        if parsed.scheme != "http":
-            raise BurnBoxError(
-                f"BURNBOX_CUSTOM_URL points to loopback but uses {parsed.scheme!r}: "
-                "use http:// for local addresses"
-            )
-        return url
-    try:
-        ip = ipaddress.ip_address(hostname)
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-            raise BurnBoxError(
-                f"BURNBOX_CUSTOM_URL hostname {hostname!r} is a private/reserved address"
-            )
-    except ValueError:
-        pass
-    return url
+    return validate_url(url, label="BURNBOX_CUSTOM_URL")
 
 
 def _safe_float(env_var: str, env_val: str | None, toml_val: float, minimum: float) -> float:

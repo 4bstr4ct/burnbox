@@ -4,12 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "burnbox"
-version = "1.2.2"
+version = "1.2.3"
 description = "Temporary email that burns after reading"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
-authors = [{ name = "burnbox contributors" }]
+authors = [{ name = "4bstr4ct" }]
 keywords = ["temp-mail", "temporary-email", "disposable-email", "otp", "cli"]
 urls = { Repository = "https://github.com/4bstr4ct/burnbox", Bug-Tracker = "https://github.com/4bstr4ct/burnbox/issues" }
 classifiers = [
@@ -37,7 +37,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest",
-    "pytest-asyncio",
+    "pytest-asyncio>=0.23,<2.0",
     "ruff",
     "mypy",
 ]

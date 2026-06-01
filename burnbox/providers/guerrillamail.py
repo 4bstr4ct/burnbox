@@ -3,17 +3,15 @@ from __future__ import annotations
 import asyncio
 import html as _html
 import logging
-import secrets
-import string
 import time
 from typing import Any
 
-import html2text
 import httpx
 
 from burnbox.exceptions import APIError, ProviderError
 from burnbox.models import InboxMessage, Session
 from burnbox.providers.sanitize import safe_path_segment
+from burnbox.providers.utils import generate_id, make_html_parser
 from burnbox.retry import RetryConfig, raise_for_status, retry
 
 logger = logging.getLogger(__name__)
@@ -21,11 +19,6 @@ logger = logging.getLogger(__name__)
 _API_BASE = "https://api.guerrillamail.com/ajax.php"
 _RETRY_CFG = RetryConfig()
 _FETCH_CONCURRENCY = 5
-
-
-def _generate_username(length: int = 10) -> str:
-    alphabet = string.ascii_lowercase + string.digits
-    return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
 class GuerrillaMailProvider:
@@ -50,10 +43,7 @@ class GuerrillaMailProvider:
         self._client = client or httpx.AsyncClient(timeout=timeout)
         self._sid_token: str | None = None
         self._address: str | None = None
-        self._html_parser = html2text.HTML2Text()
-        self._html_parser.ignore_links = False
-        self._html_parser.ignore_images = True
-        self._html_parser.body_width = 0
+        self._html_parser = make_html_parser()
 
     async def _api(self, **params: Any) -> dict[str, Any]:
         async def _do() -> dict[str, Any]:
@@ -95,7 +85,7 @@ class GuerrillaMailProvider:
         if not sid_token:
             raise ProviderError("Guerrilla Mail: failed to obtain sid_token")
 
-        username = _generate_username()
+        username = generate_id()
         data = await self._api(
             f="set_email_user",
             email_user=username,

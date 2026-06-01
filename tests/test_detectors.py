@@ -329,24 +329,3 @@ class TestAlphanumericOtpParser:
         p = AlphanumericOtpParser()
         result = p.parse("Hello world", MessageContext())
         assert len(result) == 0
-
-
-class TestDetectExpiry:
-    def test_expiry_minutes(self):
-        result = ParserEngine.detect_expiry("This code is valid for 10 minutes")
-        assert result is not None
-        assert "10" in result
-        assert "min" in result.lower()
-
-    def test_expiry_hours(self):
-        result = ParserEngine.detect_expiry("Expires in 24 hours")
-        assert result is not None
-        assert "24" in result
-
-    def test_expiry_ru(self):
-        result = ParserEngine.detect_expiry("Код действителен 5 минут")
-        assert result is not None
-
-    def test_no_expiry(self):
-        result = ParserEngine.detect_expiry("Your code is 1234")
-        assert result is None

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-
 from burnbox.detectors.base import CodeMatch, CodeParser, LINK_PATTERN, MessageContext
 from burnbox.detectors.parsers import (
     AlphanumericOtpParser,
@@ -20,15 +18,6 @@ def _default_parsers() -> list[CodeParser]:
         ResetLinkParser(),
         NumericOtpParser(),
     ]
-
-
-_EXPIRY_PATTERN = re.compile(
-    r"(?:valid\s+for|expire[s]?\s+(?:in|after)?|expir(?:y|es)\s+(?:in|after)?|действителен|действует)"
-    r"\s*"
-    r"(\d+)\s*"
-    r"(min(?:ute)?s?|hours?|hrs?|second?s?|sec|секунд|минут|часов|мин)",
-    re.IGNORECASE,
-)
 
 
 class ParserEngine:
@@ -59,10 +48,3 @@ class ParserEngine:
     @staticmethod
     def detect_links(text: str) -> list[str]:
         return LINK_PATTERN.findall(text)
-
-    @staticmethod
-    def detect_expiry(text: str) -> str | None:
-        m = _EXPIRY_PATTERN.search(text)
-        if m:
-            return f"{m.group(1)} {m.group(2)}"
-        return None

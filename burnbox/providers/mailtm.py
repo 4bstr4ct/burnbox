@@ -6,15 +6,18 @@ import logging
 import secrets
 import string
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import html2text
 import httpx
 
 from burnbox.exceptions import APIError, NoDomainsError, TokenError
 from burnbox.models import InboxMessage, MessagePreview, Session
 from burnbox.providers.sanitize import safe_path_segment
+from burnbox.providers.utils import generate_id, make_html_parser
 from burnbox.retry import RetryConfig, raise_for_status, retry
+
+if TYPE_CHECKING:
+    import html2text
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +26,6 @@ _PASSWORD_LEN = 16
 _MIN_PASSWORD_LEN = 8
 _FETCH_CONCURRENCY = 5
 _RETRY_CFG = RetryConfig()
-
-
-def _generate_secure_str(length: int = 10) -> str:
-    alphabet = string.ascii_lowercase + string.digits
-    return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
 def _generate_password(length: int = _PASSWORD_LEN) -> str:
@@ -73,14 +71,6 @@ def _normalize_content(
     return text_str.strip() or "[Empty Message]"
 
 
-def _make_html_parser() -> html2text.HTML2Text:
-    parser = html2text.HTML2Text()
-    parser.ignore_links = False
-    parser.ignore_images = True
-    parser.body_width = 0
-    return parser
-
-
 class MailTmProvider:
     name: str = "mailtm"
     supports_custom_url: bool = True
@@ -95,7 +85,7 @@ class MailTmProvider:
         self._client = client or httpx.AsyncClient(timeout=timeout)
         self._token: str | None = None
         self._account_id: str | None = None
-        self._html_parser = _make_html_parser()
+        self._html_parser = make_html_parser()
 
     async def _request(
         self,
@@ -147,7 +137,7 @@ class MailTmProvider:
         if not domain:
             raise NoDomainsError("No domain name in API response")
 
-        address = f"{_generate_secure_str()}@{domain}"
+        address = f"{generate_id()}@{domain}"
         password = _generate_password()
 
         account_data = await self._request(

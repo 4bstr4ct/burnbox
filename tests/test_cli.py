@@ -16,7 +16,7 @@ class TestVersion:
 
 
 class TestAddressCommand:
-    @patch("burnbox.cli._select_provider")
+    @patch("burnbox.cli.commands.select_provider", new_callable=AsyncMock)
     def test_address_command(self, mock_select, mock_provider):
         mock_select.return_value = (mock_provider, [])
 
@@ -26,8 +26,8 @@ class TestAddressCommand:
 
 
 class TestResumeCommand:
-    @patch("burnbox.cli.BurnBoxClient")
-    @patch("burnbox.cli._get_provider_by_name")
+    @patch("burnbox.cli.commands.BurnBoxClient")
+    @patch("burnbox.providers.utils.get_provider_by_name")
     def test_resume_no_session(self, mock_get, mock_client_cls, mock_provider):
         mock_get.return_value = (mock_provider, [])
         mock_client = AsyncMock()
