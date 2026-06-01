@@ -38,13 +38,15 @@ class UrlCodeParser:
                         conf = self._confidence
                         if _NUMERIC_VALUE_RE.match(val):
                             conf = min(conf + 0.05, 1.0)
-                        matches.append(CodeMatch(
-                            value=val,
-                            start=m.start(),
-                            end=m.end(),
-                            kind="url_code",
-                            source_parser=self.name,
-                            confidence=conf,
-                        ))
+                        matches.append(
+                            CodeMatch(
+                                value=val,
+                                start=m.start(),
+                                end=m.end(),
+                                kind="url_code",
+                                source_parser=self.name,
+                                confidence=conf,
+                            )
+                        )
                         seen_values.add(val)
         return matches

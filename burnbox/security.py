@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import ipaddress
+import logging
 from urllib.parse import urlparse
 
 from burnbox.exceptions import BurnBoxError
+
+logger = logging.getLogger(__name__)
 
 
 def validate_url(url: str, label: str = "URL") -> str:
     parsed = urlparse(url)
     if parsed.scheme not in ("https", "http"):
-        raise BurnBoxError(
-            f"Invalid {label} scheme {parsed.scheme!r}: only https/http allowed"
-        )
+        raise BurnBoxError(f"Invalid {label} scheme {parsed.scheme!r}: only https/http allowed")
     if not parsed.hostname:
         raise BurnBoxError(f"Invalid {label}: no hostname in {url!r}")
     hostname = parsed.hostname
@@ -24,9 +25,7 @@ def validate_url(url: str, label: str = "URL") -> str:
     try:
         ip = ipaddress.ip_address(hostname)
         if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-            raise BurnBoxError(
-                f"{label} hostname {hostname!r} is a private/reserved address"
-            )
-    except ValueError:
-        pass
+            raise BurnBoxError(f"{label} hostname {hostname!r} is a private/reserved address")
+    except ValueError as exc:
+        logger.debug("Hostname %r is not an IP address; allowing as DNS name: %s", hostname, exc)
     return url

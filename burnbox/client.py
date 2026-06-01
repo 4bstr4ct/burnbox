@@ -63,7 +63,9 @@ class BurnBoxClient:
         if not result:
             logger.warning("Provider %s failed to delete account %s", provider_name, account_id)
         self._store.delete()
-        logger.info("Session file deleted (provider=%s, account=%s...)", provider_name, account_id[:8])
+        logger.info(
+            "Session file deleted (provider=%s, account=%s...)", provider_name, account_id[:8]
+        )
         return result
 
     @property

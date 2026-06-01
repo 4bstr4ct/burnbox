@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.2.4 (2026-06-02)
+
+### Fix
+- **11 swallowed exceptions** — all `except: pass` now log with context or narrow exception type
+- **3 silent `KeyboardInterrupt: pass`** — user now sees `[dim]Interrupted.[/dim]`
+- **Hardcoded API URLs** — `BURNBOX_MAILTM_URL` / `BURNBOX_GUERRILLA_URL` env vars with fallback
+- **Chained `.get("from", {}).get("address")`** — `isinstance` guard prevents crash on non-dict `from` field
+- **`_poll_loop` deep nesting** — flattened with early `continue`, depth 6 → 3
+- **`copy_to_clipboard` thin wrapper** — now logs warning on failure instead of silently returning False
+- **Silent recovery** — all `except` blocks now include the caught error in log messages
+
+### Meta
+- ruff format applied project-wide (line-length 99)
+
 ## v1.2.3 (2026-06-01)
 
 ### Refactor

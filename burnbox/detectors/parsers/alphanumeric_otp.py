@@ -10,7 +10,9 @@ _ALPHANUMERIC_LABELED = re.compile(
     r"[:\s]*([A-Za-z0-9\-_]{4,32})",
     re.IGNORECASE,
 )
-_ALPHANUMERIC_GENERIC = re.compile(r"\b([A-Za-z0-9]{4,8}-[A-Za-z0-9]{4,8}(?:-[A-Za-z0-9]{4,8})*)\b")
+_ALPHANUMERIC_GENERIC = re.compile(
+    r"\b([A-Za-z0-9]{4,8}-[A-Za-z0-9]{4,8}(?:-[A-Za-z0-9]{4,8})*)\b"
+)
 _UUID_PATTERN = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}")
 _HEX_ONLY_GROUP = re.compile(r"^[0-9a-fA-F]{4,12}$")
 _ALPHANUMERIC_SIMPLE = re.compile(r"\b((?=[A-Za-z0-9]*\d)[A-Za-z0-9]{6,12})\b")
@@ -39,14 +41,16 @@ class AlphanumericOtpParser:
         for m in _ALPHANUMERIC_LABELED.finditer(text):
             value = m.group(1)
             if value not in seen_values:
-                matches.append(CodeMatch(
-                    value=value,
-                    start=m.start(1),
-                    end=m.end(1),
-                    kind="alphanumeric_otp",
-                    source_parser=self.name,
-                    confidence=_LABELED_CONFIDENCE,
-                ))
+                matches.append(
+                    CodeMatch(
+                        value=value,
+                        start=m.start(1),
+                        end=m.end(1),
+                        kind="alphanumeric_otp",
+                        source_parser=self.name,
+                        confidence=_LABELED_CONFIDENCE,
+                    )
+                )
                 seen_values.add(value)
 
         for m in _ALPHANUMERIC_GENERIC.finditer(text):
@@ -58,14 +62,16 @@ class AlphanumericOtpParser:
             groups = value.split("-")
             if all(_HEX_ONLY_GROUP.match(g) for g in groups) and len(groups) >= 4:
                 continue
-            matches.append(CodeMatch(
-                value=value,
-                start=m.start(1),
-                end=m.end(1),
-                kind="alphanumeric_otp",
-                source_parser=self.name,
-                confidence=_BASE_CONFIDENCE,
-            ))
+            matches.append(
+                CodeMatch(
+                    value=value,
+                    start=m.start(1),
+                    end=m.end(1),
+                    kind="alphanumeric_otp",
+                    source_parser=self.name,
+                    confidence=_BASE_CONFIDENCE,
+                )
+            )
             seen_values.add(value)
 
         for m in _ALPHANUMERIC_SIMPLE.finditer(text):
@@ -78,14 +84,16 @@ class AlphanumericOtpParser:
                 window = lower_text[window_start:window_end]
                 if not any(p.search(window) for p in _BOOST_FLAT):
                     continue
-                matches.append(CodeMatch(
-                    value=value,
-                    start=m.start(1),
-                    end=m.end(1),
-                    kind="alphanumeric_otp",
-                    source_parser=self.name,
-                    confidence=_BASE_CONFIDENCE,
-                ))
+                matches.append(
+                    CodeMatch(
+                        value=value,
+                        start=m.start(1),
+                        end=m.end(1),
+                        kind="alphanumeric_otp",
+                        source_parser=self.name,
+                        confidence=_BASE_CONFIDENCE,
+                    )
+                )
                 seen_values.add(value)
 
         return matches

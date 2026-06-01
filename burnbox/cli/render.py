@@ -54,13 +54,21 @@ def _render_message(msg: InboxMessage, config: AppConfig) -> str | None:
                 code_line += " (copied, clears in 30s)"
             detected_parts.append(Text.from_markup(f"[bold green]{code_line}[/bold green]"))
             if len(otp_codes) > _MAX_DISPLAY_CODES:
-                detected_parts.append(Text.from_markup(f"[dim]  +{len(otp_codes) - _MAX_DISPLAY_CODES} more[/dim]"))
+                detected_parts.append(
+                    Text.from_markup(f"[dim]  +{len(otp_codes) - _MAX_DISPLAY_CODES} more[/dim]")
+                )
         if reset_links:
             n_links = len(reset_links)
             link_word = "link" if n_links == 1 else "links"
-            detected_parts.append(Text.from_markup(f"[bold blue]Link: {n_links} verification {link_word}[/bold blue]"))
+            detected_parts.append(
+                Text.from_markup(
+                    f"[bold blue]Link: {n_links} verification {link_word}[/bold blue]"
+                )
+            )
         elif links:
-            detected_parts.append(Text.from_markup(f"[bold blue]Link: {len(links)} found[/bold blue]"))
+            detected_parts.append(
+                Text.from_markup(f"[bold blue]Link: {len(links)} found[/bold blue]")
+            )
 
         combined = Text()
         for i, part in enumerate(detected_parts):

@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 from burnbox.detectors.base import CodeMatch, LINK_PATTERN, MessageContext
 from burnbox.detectors.i18n import RESET_PATH_SEGMENTS
+
 _RESET_PATH_RE = re.compile(
     r"(?:/|^)(?:" + "|".join(re.escape(s) for s in RESET_PATH_SEGMENTS) + r")(?:/|$)",
     re.IGNORECASE,
@@ -39,13 +40,15 @@ class ResetLinkParser:
                 if any(h in lower_subject for h in subject_hints):
                     conf = min(conf + 0.1, 1.0)
 
-                matches.append(CodeMatch(
-                    value=url_str,
-                    start=m.start(),
-                    end=m.end(),
-                    kind="reset_link",
-                    source_parser=self.name,
-                    confidence=conf,
-                ))
+                matches.append(
+                    CodeMatch(
+                        value=url_str,
+                        start=m.start(),
+                        end=m.end(),
+                        kind="reset_link",
+                        source_parser=self.name,
+                        confidence=conf,
+                    )
+                )
                 seen_urls.add(url_str)
         return matches

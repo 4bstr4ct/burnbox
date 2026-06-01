@@ -27,15 +27,15 @@ async def _select(config: AppConfig) -> Provider:
         for p in all_providers:
             try:
                 await p.aclose()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Ignoring close error for %s: %s", p.name, exc)
         raise RuntimeError("No available providers. Check your network.")
     for p in all_providers:
         if p is not provider:
             try:
                 await p.aclose()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Ignoring close error for %s: %s", p.name, exc)
     return provider
 
 

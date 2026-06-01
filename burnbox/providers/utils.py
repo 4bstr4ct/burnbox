@@ -68,5 +68,5 @@ async def close_unused(unused: list[Provider]) -> None:
     for p in unused:
         try:
             await p.aclose()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Ignoring close error for %s: %s", p.name, exc)

@@ -4,7 +4,12 @@ from burnbox.config import load_config, AppConfig
 
 class TestLoadConfig:
     def test_defaults_no_file(self, tmp_path, monkeypatch):
-        for key in ["BURNBOX_PROVIDER", "BURNBOX_CUSTOM_URL", "BURNBOX_POLL_INTERVAL", "BURNBOX_TIMEOUT"]:
+        for key in [
+            "BURNBOX_PROVIDER",
+            "BURNBOX_CUSTOM_URL",
+            "BURNBOX_POLL_INTERVAL",
+            "BURNBOX_TIMEOUT",
+        ]:
             monkeypatch.delenv(key, raising=False)
         cfg = load_config(config_path=tmp_path / "nonexistent.toml")
         assert cfg.provider_default is None
@@ -14,7 +19,12 @@ class TestLoadConfig:
         assert cfg.copy_code is True
 
     def test_toml_file(self, tmp_path, monkeypatch):
-        for key in ["BURNBOX_PROVIDER", "BURNBOX_CUSTOM_URL", "BURNBOX_POLL_INTERVAL", "BURNBOX_TIMEOUT"]:
+        for key in [
+            "BURNBOX_PROVIDER",
+            "BURNBOX_CUSTOM_URL",
+            "BURNBOX_POLL_INTERVAL",
+            "BURNBOX_TIMEOUT",
+        ]:
             monkeypatch.delenv(key, raising=False)
         config_file = tmp_path / "burnbox.toml"
         config_file.write_text("""
@@ -44,7 +54,12 @@ copy_code = false
         assert cfg.poll_interval == 2.0
 
     def test_env_overrides_toml(self, tmp_path, monkeypatch):
-        for key in ["BURNBOX_PROVIDER", "BURNBOX_CUSTOM_URL", "BURNBOX_POLL_INTERVAL", "BURNBOX_TIMEOUT"]:
+        for key in [
+            "BURNBOX_PROVIDER",
+            "BURNBOX_CUSTOM_URL",
+            "BURNBOX_POLL_INTERVAL",
+            "BURNBOX_TIMEOUT",
+        ]:
             monkeypatch.delenv(key, raising=False)
         monkeypatch.setenv("BURNBOX_PROVIDER", "guerrillamail")
         config_file = tmp_path / "burnbox.toml"

@@ -15,8 +15,11 @@ class TestFullFlow:
         provider.name = "testmock"
         provider.is_alive.return_value = True
         provider.register.return_value = Session(
-            address="auto@test.com", account_id="acc1",
-            token="tok1", provider_name="testmock", created_at=0.0,
+            address="auto@test.com",
+            account_id="acc1",
+            token="tok1",
+            provider_name="testmock",
+            created_at=0.0,
         )
         msg = InboxMessage(id="m1", sender="x@y.com", subject="Verify", content="Code: 4455")
         provider.fetch_messages.return_value = [msg]
@@ -47,8 +50,11 @@ class TestFullFlow:
         provider.name = "testmock"
         provider.is_alive.return_value = True
         provider.register.return_value = Session(
-            address="keep@test.com", account_id="acc2",
-            token="tok2", provider_name="testmock", created_at=0.0,
+            address="keep@test.com",
+            account_id="acc2",
+            token="tok2",
+            provider_name="testmock",
+            created_at=0.0,
         )
         provider.fetch_messages.return_value = []
         provider.delete_account.return_value = True

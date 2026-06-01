@@ -39,13 +39,15 @@ class LabeledOtpParser:
             for m in pattern.finditer(text):
                 value = m.group(1)
                 if value not in seen_values:
-                    matches.append(CodeMatch(
-                        value=value,
-                        start=m.start(1),
-                        end=m.end(1),
-                        kind="labeled_otp",
-                        source_parser=self.name,
-                        confidence=self._confidence,
-                    ))
+                    matches.append(
+                        CodeMatch(
+                            value=value,
+                            start=m.start(1),
+                            end=m.end(1),
+                            kind="labeled_otp",
+                            source_parser=self.name,
+                            confidence=self._confidence,
+                        )
+                    )
                     seen_values.add(value)
         return matches

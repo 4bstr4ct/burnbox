@@ -74,8 +74,11 @@ class TestBurnBoxClient:
     @pytest.mark.asyncio
     async def test_resume_with_valid_token(self, mock_provider, mock_session_store):
         session = Session(
-            address="test@example.com", account_id="1",
-            token="tok", provider_name="mailtm", created_at=0.0,
+            address="test@example.com",
+            account_id="1",
+            token="tok",
+            provider_name="mailtm",
+            created_at=0.0,
         )
         mock_session_store.save(session)
         mock_provider.fetch_messages.return_value = []
@@ -101,8 +104,11 @@ class TestBurnBoxClient:
     @pytest.mark.asyncio
     async def test_resume_expired_session(self, mock_provider, mock_session_store):
         session = Session(
-            address="test@example.com", account_id="1",
-            token="tok", provider_name="mailtm", created_at=0.0,
+            address="test@example.com",
+            account_id="1",
+            token="tok",
+            provider_name="mailtm",
+            created_at=0.0,
         )
         mock_session_store.save(session)
         mock_provider.fetch_messages.side_effect = AuthExpiredError("Session expired")

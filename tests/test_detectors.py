@@ -1,7 +1,13 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
-from burnbox.detectors import detect_codes, detect_links, extract_best_code, CodeMatch, MessageContext
+from burnbox.detectors import (
+    detect_codes,
+    detect_links,
+    extract_best_code,
+    CodeMatch,
+    MessageContext,
+)
 from burnbox.detectors.engine import ParserEngine
 from burnbox.detectors.parsers.alphanumeric_otp import AlphanumericOtpParser
 from burnbox.detectors.parsers.labeled_otp import LabeledOtpParser
@@ -12,12 +18,21 @@ from burnbox.detectors.parsers.reset_link import ResetLinkParser
 
 class TestCodeMatch:
     def test_frozen(self):
-        m = CodeMatch(value="1234", start=0, end=4, kind="labeled_otp", source_parser="X", confidence=0.9)
+        m = CodeMatch(
+            value="1234", start=0, end=4, kind="labeled_otp", source_parser="X", confidence=0.9
+        )
         with pytest.raises(AttributeError):
             m.value = "5678"
 
     def test_fields(self):
-        m = CodeMatch(value="1234", start=10, end=14, kind="labeled_otp", source_parser="LabeledOtpParser", confidence=0.9)
+        m = CodeMatch(
+            value="1234",
+            start=10,
+            end=14,
+            kind="labeled_otp",
+            source_parser="LabeledOtpParser",
+            confidence=0.9,
+        )
         assert m.value == "1234"
         assert m.kind == "labeled_otp"
         assert m.confidence == 0.9
@@ -221,23 +236,58 @@ class TestParserEngine:
 
     def test_best_code_multiple_prefers_highest_confidence(self):
         engine = ParserEngine()
-        high = CodeMatch(value="1234", start=0, end=4, kind="labeled_otp", source_parser="LabeledOtpParser", confidence=0.9)
-        low = CodeMatch(value="5678", start=10, end=14, kind="numeric_otp", source_parser="NumericOtpParser", confidence=0.3)
+        high = CodeMatch(
+            value="1234",
+            start=0,
+            end=4,
+            kind="labeled_otp",
+            source_parser="LabeledOtpParser",
+            confidence=0.9,
+        )
+        low = CodeMatch(
+            value="5678",
+            start=10,
+            end=14,
+            kind="numeric_otp",
+            source_parser="NumericOtpParser",
+            confidence=0.3,
+        )
         best = engine.best_code([low, high])
         assert best is not None
         assert best.value == "1234"
 
     def test_best_code_skips_reset_links(self):
         engine = ParserEngine()
-        link = CodeMatch(value="https://x.com/reset", start=0, end=22, kind="reset_link", source_parser="ResetLinkParser", confidence=0.7)
-        code = CodeMatch(value="1234", start=0, end=4, kind="numeric_otp", source_parser="NumericOtpParser", confidence=0.3)
+        link = CodeMatch(
+            value="https://x.com/reset",
+            start=0,
+            end=22,
+            kind="reset_link",
+            source_parser="ResetLinkParser",
+            confidence=0.7,
+        )
+        code = CodeMatch(
+            value="1234",
+            start=0,
+            end=4,
+            kind="numeric_otp",
+            source_parser="NumericOtpParser",
+            confidence=0.3,
+        )
         best = engine.best_code([link, code])
         assert best is not None
         assert best.value == "1234"
 
     def test_best_code_only_reset_links(self):
         engine = ParserEngine()
-        link = CodeMatch(value="https://x.com/reset", start=0, end=22, kind="reset_link", source_parser="ResetLinkParser", confidence=0.7)
+        link = CodeMatch(
+            value="https://x.com/reset",
+            start=0,
+            end=22,
+            kind="reset_link",
+            source_parser="ResetLinkParser",
+            confidence=0.7,
+        )
         best = engine.best_code([link])
         assert best is not None
         assert best.kind == "reset_link"
@@ -247,7 +297,9 @@ class TestParserEngine:
         assert engine.best_code([]) is None
 
     def test_context_propagation(self):
-        result = detect_codes("Use 8472", MessageContext(sender="security@github.com", subject="Verify"))
+        result = detect_codes(
+            "Use 8472", MessageContext(sender="security@github.com", subject="Verify")
+        )
         numeric = [m for m in result if m.kind == "numeric_otp"]
         if numeric:
             assert numeric[0].confidence > 0.3
@@ -257,7 +309,9 @@ class TestParserEngine:
         mock_parser.name = "mock"
         mock_parser.priority = 1
         mock_parser.parse.return_value = [
-            CodeMatch(value="999", start=0, end=3, kind="mock", source_parser="mock", confidence=1.0)
+            CodeMatch(
+                value="999", start=0, end=3, kind="mock", source_parser="mock", confidence=1.0
+            )
         ]
         engine = ParserEngine(parsers=[mock_parser])
         result = engine.parse("anything", MessageContext())
@@ -294,6 +348,7 @@ class TestExtractBestCode:
 class TestCopyToClipboard:
     def test_does_not_crash(self):
         from burnbox.detectors import copy_to_clipboard
+
         copy_to_clipboard("test")
 
     def test_fallback_to_subprocess(self):
@@ -301,6 +356,7 @@ class TestCopyToClipboard:
             with patch("subprocess.run") as mock_run:
                 mock_run.return_value = MagicMock(returncode=0)
                 from burnbox.detectors.clipboard import copy_to_clipboard
+
                 result = copy_to_clipboard("test")
         assert result is True
 

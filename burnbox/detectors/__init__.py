@@ -3,7 +3,11 @@ from __future__ import annotations
 import html as _html
 
 from burnbox.detectors.base import CodeMatch, MessageContext
-from burnbox.detectors.clipboard import async_copy_to_clipboard, copy_to_clipboard, copy_to_clipboard_auto_clear
+from burnbox.detectors.clipboard import (
+    async_copy_to_clipboard,
+    copy_to_clipboard,
+    copy_to_clipboard_auto_clear,
+)
 from burnbox.detectors.engine import ParserEngine
 
 _engine = ParserEngine()

@@ -16,8 +16,11 @@ class FakeProvider:
 
     async def register(self) -> Session:
         return Session(
-            address=f"test@{self.name}.com", account_id="1",
-            token="t", provider_name=self.name, created_at=0.0,
+            address=f"test@{self.name}.com",
+            account_id="1",
+            token="t",
+            provider_name=self.name,
+            created_at=0.0,
         )
 
     async def restore(self, session: Session) -> None:

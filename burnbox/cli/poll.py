@@ -24,23 +24,6 @@ async def _poll_loop(client: BurnBoxClient, config: AppConfig) -> None:
         while True:
             try:
                 new_mails = await client.fetch_new(seen_ids)
-                consecutive_errors = 0
-                if new_mails:
-                    status.stop()
-                    last_code: str | None = None
-                    for mail in new_mails:
-                        code = _render_message(mail, config)
-                        if code:
-                            last_code = code
-                        seen_ids.add(mail.id)
-                    if last_code:
-                        from burnbox.detectors import async_copy_to_clipboard, copy_to_clipboard_auto_clear
-                        await async_copy_to_clipboard(last_code)
-                        await copy_to_clipboard_auto_clear(last_code)
-                    status.update(f"burnbox: waiting for drops... [dim]({len(seen_ids)} seen)[/dim]")
-                    status.start()
-                else:
-                    status.update(f"burnbox: waiting for drops... [dim]({len(seen_ids)} seen)[/dim]")
             except AuthExpiredError:
                 raise
             except BurnBoxError as exc:
@@ -50,6 +33,8 @@ async def _poll_loop(client: BurnBoxClient, config: AppConfig) -> None:
                         f"Too many consecutive errors ({consecutive_errors}). Last: {exc}"
                     ) from exc
                 console.print(f"[red]Error: {exc}[/red]")
+                await asyncio.sleep(config.poll_interval)
+                continue
             except KeyboardInterrupt:
                 return
             except Exception as exc:
@@ -59,5 +44,31 @@ async def _poll_loop(client: BurnBoxClient, config: AppConfig) -> None:
                         f"Too many consecutive errors ({consecutive_errors}). Last: {exc}"
                     ) from exc
                 logger.warning("Unexpected error in poll loop: %s", exc)
+                await asyncio.sleep(config.poll_interval)
+                continue
+
+            consecutive_errors = 0
+            if not new_mails:
+                status.update(f"burnbox: waiting for drops... [dim]({len(seen_ids)} seen)[/dim]")
+                await asyncio.sleep(config.poll_interval)
+                continue
+
+            status.stop()
+            last_code: str | None = None
+            for mail in new_mails:
+                code = _render_message(mail, config)
+                if code:
+                    last_code = code
+                seen_ids.add(mail.id)
+            if last_code:
+                from burnbox.detectors import (
+                    async_copy_to_clipboard,
+                    copy_to_clipboard_auto_clear,
+                )
+
+                await async_copy_to_clipboard(last_code)
+                await copy_to_clipboard_auto_clear(last_code)
+            status.update(f"burnbox: waiting for drops... [dim]({len(seen_ids)} seen)[/dim]")
+            status.start()
 
             await asyncio.sleep(config.poll_interval)

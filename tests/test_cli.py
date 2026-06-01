@@ -31,7 +31,9 @@ class TestResumeCommand:
     def test_resume_no_session(self, mock_get, mock_client_cls, mock_provider):
         mock_get.return_value = (mock_provider, [])
         mock_client = AsyncMock()
-        mock_client.resume.side_effect = SessionError("No saved session found. Run 'burnbox' first.")
+        mock_client.resume.side_effect = SessionError(
+            "No saved session found. Run 'burnbox' first."
+        )
         mock_client.session = None
         mock_client_cls.return_value = mock_client
 

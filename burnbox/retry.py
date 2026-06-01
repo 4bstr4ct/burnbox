@@ -70,7 +70,10 @@ def raise_for_status(
             delay = _delay_for_attempt(attempt, config)
             logger.warning(
                 "Server error %d (attempt %d/%d), retrying in %.1fs",
-                status_code, attempt, config.max_retries, delay,
+                status_code,
+                attempt,
+                config.max_retries,
+                delay,
             )
             raise _Retryable(delay)
         raise APIError(status_code=status_code, detail=detail) from exc
@@ -95,7 +98,10 @@ async def retry(
                 delay = _delay_for_attempt(attempt, config)
                 logger.warning(
                     "Request failed (attempt %d/%d), retrying in %.1fs: %s",
-                    attempt, config.max_retries, delay, exc,
+                    attempt,
+                    config.max_retries,
+                    delay,
+                    exc,
                 )
                 await asyncio.sleep(delay)
             else:

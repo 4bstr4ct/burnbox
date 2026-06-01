@@ -52,7 +52,9 @@ class SessionStore:
             return None
 
         if not isinstance(data, dict):
-            logger.warning("Session file %s: expected dict, got %s", self._file, type(data).__name__)
+            logger.warning(
+                "Session file %s: expected dict, got %s", self._file, type(data).__name__
+            )
             return None
 
         required = ("address", "token", "provider_name", "account_id")
@@ -80,7 +82,7 @@ class SessionStore:
         try:
             self._file.unlink()
             logger.info("Session file deleted: %s", self._file)
-        except FileNotFoundError:
-            pass
+        except FileNotFoundError as exc:
+            logger.debug("Session file already absent: %s: %s", self._file, exc)
         except OSError as exc:
             logger.warning("Failed to delete session file %s: %s", self._file, exc)

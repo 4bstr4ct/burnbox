@@ -48,7 +48,10 @@ class NumericOtpParser:
             if value in seen_values:
                 continue
 
-            if any(m.start() >= u_start - 2 and m.end() <= u_end + 2 for u_start, u_end in uuid_positions):
+            if any(
+                m.start() >= u_start - 2 and m.end() <= u_end + 2
+                for u_start, u_end in uuid_positions
+            ):
                 continue
 
             if _YEAR_RE.match(value):
@@ -65,14 +68,16 @@ class NumericOtpParser:
             if ctx_boost:
                 conf = min(conf + ctx_boost, self._max)
 
-            matches.append(CodeMatch(
-                value=value,
-                start=m.start(1),
-                end=m.end(1),
-                kind="numeric_otp",
-                source_parser=self.name,
-                confidence=conf,
-            ))
+            matches.append(
+                CodeMatch(
+                    value=value,
+                    start=m.start(1),
+                    end=m.end(1),
+                    kind="numeric_otp",
+                    source_parser=self.name,
+                    confidence=conf,
+                )
+            )
             seen_values.add(value)
         return matches
 

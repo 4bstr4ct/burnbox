@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import html as _html
 import logging
+import os
 import time
 from typing import Any
 
@@ -16,7 +17,7 @@ from burnbox.retry import RetryConfig, raise_for_status, retry
 
 logger = logging.getLogger(__name__)
 
-_API_BASE = "https://api.guerrillamail.com/ajax.php"
+_API_BASE = os.environ.get("BURNBOX_GUERRILLA_URL", "https://api.guerrillamail.com/ajax.php")
 _RETRY_CFG = RetryConfig()
 _FETCH_CONCURRENCY = 5
 
@@ -130,11 +131,13 @@ class GuerrillaMailProvider:
                 seen_ids.add(mail_id)
                 continue
 
-            to_fetch.append((
-                mail_id,
-                sender,
-                m.get("mail_subject", "No Subject"),
-            ))
+            to_fetch.append(
+                (
+                    mail_id,
+                    sender,
+                    m.get("mail_subject", "No Subject"),
+                )
+            )
 
         sem = asyncio.Semaphore(_FETCH_CONCURRENCY)
 

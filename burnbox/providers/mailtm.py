@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import html as _html
 import logging
+import os
 import secrets
 import string
 import time
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_BASE_URL = os.environ.get("BURNBOX_MAILTM_URL", "https://api.mail.tm")
 _SPECIAL = "!@#$%&*"
 _PASSWORD_LEN = 16
 _MIN_PASSWORD_LEN = 8
@@ -57,14 +59,10 @@ def _normalize_content(
     parser: html2text.HTML2Text,
 ) -> str:
     html_str = (
-        "".join(str(i) for i in raw_html)
-        if isinstance(raw_html, list)
-        else (raw_html or "")
+        "".join(str(i) for i in raw_html) if isinstance(raw_html, list) else (raw_html or "")
     )
     text_str = (
-        "".join(str(i) for i in raw_text)
-        if isinstance(raw_text, list)
-        else (raw_text or "")
+        "".join(str(i) for i in raw_text) if isinstance(raw_text, list) else (raw_text or "")
     )
     if html_str.strip():
         return _html.unescape(parser.handle(html_str).strip())
@@ -77,7 +75,7 @@ class MailTmProvider:
 
     def __init__(
         self,
-        base_url: str = "https://api.mail.tm",
+        base_url: str = _DEFAULT_BASE_URL,
         client: httpx.AsyncClient | None = None,
         timeout: float = 10.0,
     ) -> None:
@@ -141,7 +139,8 @@ class MailTmProvider:
         password = _generate_password()
 
         account_data = await self._request(
-            "POST", "/accounts",
+            "POST",
+            "/accounts",
             body={"address": address, "password": password},
             auth=False,
         )
@@ -149,15 +148,18 @@ class MailTmProvider:
 
         try:
             token_data = await self._request(
-                "POST", "/token",
+                "POST",
+                "/token",
                 body={"address": address, "password": password},
                 auth=False,
             )
         except APIError:
             try:
-                await self._request("DELETE", f"/accounts/{safe_path_segment(account_id)}", auth=False)
-            except Exception:
-                logger.warning("Failed to clean up orphaned account %s", account_id)
+                await self._request(
+                    "DELETE", f"/accounts/{safe_path_segment(account_id)}", auth=False
+                )
+            except Exception as exc:
+                logger.warning("Failed to clean up orphaned account %s: %s", account_id, exc)
             raise TokenError("Failed to retrieve authentication token")
 
         token = token_data.get("token")
@@ -182,15 +184,23 @@ class MailTmProvider:
     async def fetch_messages(self, seen_ids: set[str]) -> list[InboxMessage]:
         data = await self._request("GET", "/messages")
         members = data.get("hydra:member", [])
-        previews = [
-            MessagePreview(
-                id=m.get("id", ""),
-                sender=m.get("from", {}).get("address", "Unknown Sender"),
-                subject=m.get("subject", "No Subject"),
+        previews = []
+        for m in members:
+            if not m.get("id"):
+                continue
+            sender_obj = m.get("from")
+            sender = (
+                sender_obj.get("address", "Unknown Sender")
+                if isinstance(sender_obj, dict)
+                else "Unknown Sender"
             )
-            for m in members
-            if m.get("id")
-        ]
+            previews.append(
+                MessagePreview(
+                    id=m.get("id", ""),
+                    sender=sender,
+                    subject=m.get("subject", "No Subject"),
+                )
+            )
         new = [p for p in previews if p.id not in seen_ids]
 
         sem = asyncio.Semaphore(_FETCH_CONCURRENCY)
@@ -198,9 +208,7 @@ class MailTmProvider:
         async def _fetch_one(p: MessagePreview) -> InboxMessage:
             async with sem:
                 full = await self._request("GET", f"/messages/{safe_path_segment(p.id)}")
-            content = _normalize_content(
-                full.get("html"), full.get("text"), self._html_parser
-            )
+            content = _normalize_content(full.get("html"), full.get("text"), self._html_parser)
             return InboxMessage(
                 id=p.id,
                 sender=p.sender,
@@ -208,9 +216,7 @@ class MailTmProvider:
                 content=content,
             )
 
-        results = await asyncio.gather(
-            *[_fetch_one(p) for p in new], return_exceptions=True
-        )
+        results = await asyncio.gather(*[_fetch_one(p) for p in new], return_exceptions=True)
         messages: list[InboxMessage] = []
         for p, r in zip(new, results):
             if isinstance(r, InboxMessage):

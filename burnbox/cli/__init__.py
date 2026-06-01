@@ -65,7 +65,9 @@ def main(
     ] = None,
     version: Annotated[
         bool,
-        typer.Option("--version", "-v", help="Show version", callback=_version_callback, is_eager=True),
+        typer.Option(
+            "--version", "-v", help="Show version", callback=_version_callback, is_eager=True
+        ),
     ] = False,
 ) -> None:
     """burnbox - Temporary email that burns after reading."""

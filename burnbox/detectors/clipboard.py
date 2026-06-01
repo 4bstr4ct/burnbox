@@ -16,6 +16,7 @@ _pending_clear = False
 
 def _is_wayland() -> bool:
     import os
+
     return bool(os.environ.get("WAYLAND_DISPLAY"))
 
 
@@ -40,7 +41,9 @@ def _emergency_clear() -> None:
         _clear_clipboard()
 
 
-async def copy_to_clipboard_auto_clear(text: str, clear_after: float = _CLEAR_AFTER_SECONDS) -> bool:
+async def copy_to_clipboard_auto_clear(
+    text: str, clear_after: float = _CLEAR_AFTER_SECONDS
+) -> bool:
     global _pending_clear
     if not await async_copy_to_clipboard(text):
         return False
@@ -55,8 +58,8 @@ async def copy_to_clipboard_auto_clear(text: str, clear_after: float = _CLEAR_AF
     try:
         loop = asyncio.get_running_loop()
         loop.create_task(_clear_later())
-    except RuntimeError:
-        pass
+    except RuntimeError as exc:
+        logger.debug("No running event loop; skipping auto-clear schedule: %s", exc)
     return True
 
 
@@ -79,10 +82,11 @@ def _copy_to_clipboard_sync(text: str) -> bool:
 
     try:
         import pyperclip
+
         pyperclip.copy(text)
         return True
-    except Exception:
-        pass
+    except (ImportError, RuntimeError) as exc:
+        logger.debug("pyperclip unavailable or failed: %s", exc)
 
     if _is_macos():
         try:
@@ -123,7 +127,10 @@ def _copy_to_clipboard_sync(text: str) -> bool:
 
 
 def copy_to_clipboard(text: str) -> bool:
-    return _copy_to_clipboard_sync(text)
+    result = _copy_to_clipboard_sync(text)
+    if not result:
+        logger.warning("Could not copy to clipboard")
+    return result
 
 
 atexit.register(_emergency_clear)

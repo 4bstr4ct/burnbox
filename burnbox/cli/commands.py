@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from rich.console import Console
 from rich.panel import Panel
 
@@ -12,6 +14,7 @@ from burnbox.session import SessionStore
 from burnbox.cli.poll import _poll_loop
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 async def _run(config: AppConfig, keep: bool) -> None:
@@ -21,12 +24,14 @@ async def _run(config: AppConfig, keep: bool) -> None:
     store = SessionStore()
     client = BurnBoxClient(provider=provider, session_store=store, config=config)
 
-    console.print(Panel(
-        "Temp email that burns after reading",
-        title="[bold red]burnbox[/bold red]",
-        border_style="red",
-        padding=(0, 2),
-    ))
+    console.print(
+        Panel(
+            "Temp email that burns after reading",
+            title="[bold red]burnbox[/bold red]",
+            border_style="red",
+            padding=(0, 2),
+        )
+    )
     try:
         session = await client.register()
         console.print()
@@ -36,10 +41,12 @@ async def _run(config: AppConfig, keep: bool) -> None:
             await async_copy_to_clipboard(session.address)
             console.print("[dim]  Address copied to clipboard[/dim]")
         console.print()
-        console.print("[dim]  Ctrl+C to exit and burn · --keep to preserve · burnbox resume[/dim]\n")
+        console.print(
+            "[dim]  Ctrl+C to exit and burn · --keep to preserve · burnbox resume[/dim]\n"
+        )
         await _poll_loop(client, config)
     except KeyboardInterrupt:
-        pass
+        console.print("[dim]Interrupted.[/dim]")
     except BurnBoxError as exc:
         console.print(f"[bold red]Critical failure: {exc}[/bold red]")
     finally:
@@ -49,7 +56,8 @@ async def _run(config: AppConfig, keep: bool) -> None:
                     console.print("[dim]Burned.[/dim]")
                 else:
                     console.print("[bold red]Failed to burn account.[/bold red]")
-            except Exception:
+            except (OSError, BurnBoxError) as exc:
+                logger.warning("Failed to burn account: %s", exc)
                 console.print("[bold red]Failed to burn account.[/bold red]")
         elif keep and client.session:
             console.print("[dim]Kept alive. Resume with: [bold]burnbox resume[/bold][/dim]")
@@ -71,13 +79,13 @@ async def _run_address(config: AppConfig) -> None:
             await async_copy_to_clipboard(session.address)
             console.print("[dim]Address copied to clipboard.[/dim]")
     except KeyboardInterrupt:
-        pass
+        console.print("[dim]Interrupted.[/dim]")
     finally:
         if client.session:
             try:
                 await client.burn()
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.warning("Failed to burn account on interrupt: %s", exc)
         store.delete()
         await close_unused(unused)
         await provider.aclose()
@@ -92,7 +100,9 @@ async def _run_resume(config: AppConfig, keep: bool) -> None:
 
     provider, unused = get_provider_by_name(config, saved.provider_name)
     if not provider:
-        console.print(f"[bold red]Unknown provider '{saved.provider_name}' in saved session.[/bold red]")
+        console.print(
+            f"[bold red]Unknown provider '{saved.provider_name}' in saved session.[/bold red]"
+        )
         store.delete()
         await close_unused(unused)
         return
@@ -107,7 +117,7 @@ async def _run_resume(config: AppConfig, keep: bool) -> None:
         console.print("[dim]  Ctrl+C to exit and burn · --keep to preserve[/dim]\n")
         await _poll_loop(client, config)
     except KeyboardInterrupt:
-        pass
+        console.print("[dim]Interrupted.[/dim]")
     except SessionError as exc:
         console.print(f"[bold red]{exc}[/bold red]")
     except BurnBoxError as exc:
@@ -119,7 +129,8 @@ async def _run_resume(config: AppConfig, keep: bool) -> None:
                     console.print("[dim]Burned.[/dim]")
                 else:
                     console.print("[bold red]Failed to burn account.[/bold red]")
-            except Exception:
+            except (OSError, BurnBoxError) as exc:
+                logger.warning("Failed to burn account: %s", exc)
                 console.print("[bold red]Failed to burn account.[/bold red]")
         elif keep and client.session:
             console.print("[dim]Kept alive. Resume with: [bold]burnbox resume[/bold][/dim]")

@@ -23,15 +23,23 @@ class TestSession:
 
     def test_session_frozen(self):
         s = Session(
-            address="a@b.c", account_id="1", token="t",
-            provider_name="mailtm", created_at=0.0,
+            address="a@b.c",
+            account_id="1",
+            token="t",
+            provider_name="mailtm",
+            created_at=0.0,
         )
         with pytest.raises(AttributeError):
             s.address = "new"
 
     def test_session_repr_masks_token(self):
-        s = Session(address="a@b.c", account_id="1", token="secret123",
-                     provider_name="mailtm", created_at=0.0)
+        s = Session(
+            address="a@b.c",
+            account_id="1",
+            token="secret123",
+            provider_name="mailtm",
+            created_at=0.0,
+        )
         r = repr(s)
         assert "secret123" not in r
         assert "***" in r
@@ -72,9 +80,7 @@ class TestMailTmProvider:
         token_resp.json.return_value = {"token": "tok456"}
         token_resp.raise_for_status = MagicMock()
 
-        mock_async_client.request = AsyncMock(
-            side_effect=[domains_resp, account_resp, token_resp]
-        )
+        mock_async_client.request = AsyncMock(side_effect=[domains_resp, account_resp, token_resp])
         p = MailTmProvider(client=mock_async_client)
         session = await p.register()
         assert isinstance(session, Session)
@@ -143,8 +149,11 @@ class TestMailTmProvider:
 
         detail_resp = MagicMock()
         detail_resp.json.return_value = {
-            "id": "msg2", "from": {"address": "c@d.c"},
-            "subject": "New", "html": None, "text": "New message",
+            "id": "msg2",
+            "from": {"address": "c@d.c"},
+            "subject": "New",
+            "html": None,
+            "text": "New message",
         }
         detail_resp.raise_for_status = MagicMock()
 

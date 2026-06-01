@@ -10,6 +10,7 @@ from burnbox.models import InboxMessage, Session
 @pytest.fixture
 def mock_session_store(tmp_path):
     from burnbox.session import SessionStore
+
     return SessionStore(store_dir=tmp_path)
 
 
@@ -44,7 +45,9 @@ class TestMessage:
 
     def test_links(self):
         engine = ParserEngine()
-        inner = InboxMessage(id="1", sender="a@b.c", subject="Hi", content="Click https://example.com")
+        inner = InboxMessage(
+            id="1", sender="a@b.c", subject="Hi", content="Click https://example.com"
+        )
         msg = Message(inner, engine)
         assert len(msg.links) == 1
 
@@ -62,8 +65,11 @@ class TestBurnBox:
     async def test_address(self, mock_provider, mock_session_store):
         client = AsyncMock()
         client.session = Session(
-            address="test@example.com", account_id="1",
-            token="tok", provider_name="mailtm", created_at=0.0,
+            address="test@example.com",
+            account_id="1",
+            token="tok",
+            provider_name="mailtm",
+            created_at=0.0,
         )
         client.fetch_new = AsyncMock(return_value=[])
         client.burn = AsyncMock(return_value=True)
@@ -74,8 +80,11 @@ class TestBurnBox:
     async def test_fetch_new(self, mock_provider, mock_session_store):
         client = AsyncMock()
         client.session = Session(
-            address="test@example.com", account_id="1",
-            token="tok", provider_name="mailtm", created_at=0.0,
+            address="test@example.com",
+            account_id="1",
+            token="tok",
+            provider_name="mailtm",
+            created_at=0.0,
         )
         msg = InboxMessage(id="1", sender="a@b.c", subject="Hi", content="code: 9999")
         client.fetch_new = AsyncMock(return_value=[msg])
@@ -89,8 +98,11 @@ class TestBurnBox:
     async def test_context_manager_burns(self, mock_provider):
         client = AsyncMock()
         client.session = Session(
-            address="test@example.com", account_id="1",
-            token="tok", provider_name="mailtm", created_at=0.0,
+            address="test@example.com",
+            account_id="1",
+            token="tok",
+            provider_name="mailtm",
+            created_at=0.0,
         )
         client.burn = AsyncMock(return_value=True)
         box = BurnBox(provider=mock_provider, client=client, config=AppConfig())
@@ -103,8 +115,11 @@ class TestBurnBox:
     async def test_wait_for_message_timeout(self, mock_provider):
         client = AsyncMock()
         client.session = Session(
-            address="test@example.com", account_id="1",
-            token="tok", provider_name="mailtm", created_at=0.0,
+            address="test@example.com",
+            account_id="1",
+            token="tok",
+            provider_name="mailtm",
+            created_at=0.0,
         )
         client.fetch_new = AsyncMock(return_value=[])
         client.burn = AsyncMock(return_value=True)
