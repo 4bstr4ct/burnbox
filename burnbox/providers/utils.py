@@ -33,10 +33,12 @@ def make_html_parser() -> html2text.HTML2Text:
 def build_registry(custom_url: str | None = None) -> ProviderRegistry:
     from burnbox.providers.guerrillamail import GuerrillaMailProvider
     from burnbox.providers.mailtm import MailTmProvider
+    from burnbox.providers.tempfastmail import TempFastMailProvider
 
     from burnbox.security import validate_url
 
     registry = ProviderRegistry()
+    registry.register(TempFastMailProvider())
     if custom_url:
         validated = validate_url(custom_url, label="custom_url")
         registry.register(MailTmProvider(base_url=validated))

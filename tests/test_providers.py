@@ -4,6 +4,7 @@ from burnbox.providers.base import Provider
 from burnbox.models import Session
 from burnbox.providers.guerrillamail import GuerrillaMailProvider
 from burnbox.providers.mailtm import MailTmProvider
+from burnbox.providers.tempfastmail import TempFastMailProvider
 from burnbox.exceptions import NoDomainsError, ProviderError
 
 
@@ -342,6 +343,156 @@ class TestGuerrillaMailProvider:
     async def test_context_manager(self, mock_async_client):
         mock_async_client.aclose = AsyncMock()
         p = GuerrillaMailProvider(client=mock_async_client)
+        async with p:
+            pass
+        mock_async_client.aclose.assert_called_once()
+
+
+class TestTempFastMailProvider:
+    def test_name(self):
+        p = TempFastMailProvider()
+        assert p.name == "tempfastmail"
+
+    def test_supports_custom_url(self):
+        p = TempFastMailProvider()
+        assert p.supports_custom_url is True
+
+    @pytest.mark.asyncio
+    async def test_is_alive_success(self, mock_async_client):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {"email": "test@tempfastmail.com", "uuid": "abc"}
+        mock_async_client.post = AsyncMock(return_value=resp)
+        p = TempFastMailProvider(client=mock_async_client)
+        assert await p.is_alive() is True
+
+    @pytest.mark.asyncio
+    async def test_is_alive_failure(self, mock_async_client):
+        mock_async_client.post.side_effect = Exception("connection error")
+        p = TempFastMailProvider(client=mock_async_client)
+        assert await p.is_alive() is False
+
+    @pytest.mark.asyncio
+    async def test_register(self, mock_async_client):
+        register_resp = MagicMock()
+        register_resp.json.return_value = {
+            "email": "test@tempfastmail.com",
+            "uuid": "53f4b502-d2d1-4b94-b7a3-323bea70a0c0",
+        }
+        register_resp.raise_for_status = MagicMock()
+
+        mock_async_client.request = AsyncMock(return_value=register_resp)
+        p = TempFastMailProvider(client=mock_async_client)
+        session = await p.register()
+        assert isinstance(session, Session)
+        assert session.address.endswith("@tempfastmail.com")
+        assert session.account_id == "53f4b502-d2d1-4b94-b7a3-323bea70a0c0"
+        assert session.token == session.account_id
+        assert session.provider_name == "tempfastmail"
+
+    @pytest.mark.asyncio
+    async def test_register_missing_email(self, mock_async_client):
+        register_resp = MagicMock()
+        register_resp.json.return_value = {"uuid": "abc"}
+        register_resp.raise_for_status = MagicMock()
+        mock_async_client.request = AsyncMock(return_value=register_resp)
+        p = TempFastMailProvider(client=mock_async_client)
+        with pytest.raises(ProviderError, match="missing email"):
+            await p.register()
+
+    @pytest.mark.asyncio
+    async def test_fetch_messages(self, mock_async_client):
+        list_resp = MagicMock()
+        list_resp.json.return_value = [
+            {
+                "uuid": "msg1",
+                "from": "noreply@example.com",
+                "from_name": "Example",
+                "subject": "Verify",
+                "received_at": "2026-06-02T12:00:00+00:00",
+            }
+        ]
+        list_resp.raise_for_status = MagicMock()
+
+        detail_resp = MagicMock()
+        detail_resp.json.return_value = {
+            "uuid": "msg1",
+            "from": "noreply@example.com",
+            "from_name": "Example",
+            "subject": "Verify",
+            "html": "<p>Your code is 1234</p>",
+            "received_at": "2026-06-02T12:00:00+00:00",
+        }
+        detail_resp.raise_for_status = MagicMock()
+
+        mock_async_client.request = AsyncMock(side_effect=[list_resp, detail_resp])
+        p = TempFastMailProvider(client=mock_async_client)
+        p._uuid = "box-uuid-123"
+        messages = await p.fetch_messages(seen_ids=set())
+        assert len(messages) == 1
+        assert messages[0].sender == "Example"
+        assert "1234" in messages[0].content
+
+    @pytest.mark.asyncio
+    async def test_fetch_messages_filters_seen(self, mock_async_client):
+        list_resp = MagicMock()
+        list_resp.json.return_value = [
+            {
+                "uuid": "msg-old",
+                "from": "a@b.c",
+                "from_name": None,
+                "subject": "Old",
+                "received_at": "2026-06-02T11:00:00+00:00",
+            },
+            {
+                "uuid": "msg-new",
+                "from": "c@d.c",
+                "from_name": "NewSender",
+                "subject": "New",
+                "received_at": "2026-06-02T12:00:00+00:00",
+            },
+        ]
+        list_resp.raise_for_status = MagicMock()
+
+        detail_resp = MagicMock()
+        detail_resp.json.return_value = {
+            "uuid": "msg-new",
+            "from": "c@d.c",
+            "from_name": "NewSender",
+            "subject": "New",
+            "html": "<p>New message</p>",
+            "received_at": "2026-06-02T12:00:00+00:00",
+        }
+        detail_resp.raise_for_status = MagicMock()
+
+        mock_async_client.request = AsyncMock(side_effect=[list_resp, detail_resp])
+        p = TempFastMailProvider(client=mock_async_client)
+        p._uuid = "box-uuid-123"
+        messages = await p.fetch_messages(seen_ids={"msg-old"})
+        assert len(messages) == 1
+        assert messages[0].id == "msg-new"
+
+    @pytest.mark.asyncio
+    async def test_fetch_messages_not_registered(self, mock_async_client):
+        p = TempFastMailProvider(client=mock_async_client)
+        with pytest.raises(ProviderError, match="not registered"):
+            await p.fetch_messages(seen_ids=set())
+
+    @pytest.mark.asyncio
+    async def test_delete_account_noop(self, mock_async_client):
+        p = TempFastMailProvider(client=mock_async_client)
+        result = await p.delete_account("any-id")
+        assert result is True
+        mock_async_client.request.assert_not_called()
+
+    def test_provider_protocol_compliance(self):
+        p = TempFastMailProvider()
+        assert isinstance(p, Provider)
+
+    @pytest.mark.asyncio
+    async def test_context_manager(self, mock_async_client):
+        mock_async_client.aclose = AsyncMock()
+        p = TempFastMailProvider(client=mock_async_client)
         async with p:
             pass
         mock_async_client.aclose.assert_called_once()

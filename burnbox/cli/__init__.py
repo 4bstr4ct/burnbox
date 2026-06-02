@@ -7,9 +7,11 @@ from typing import Annotated, Optional
 
 import typer
 from rich.console import Console
+from rich.table import Table
 
 from burnbox import __version__
 from burnbox.config import load_config
+from burnbox.providers.base import Provider
 
 from burnbox.cli.commands import _run, _run_address, _run_resume
 
@@ -61,7 +63,7 @@ def main(
     ] = False,
     provider: Annotated[
         Optional[str],
-        typer.Option("--provider", help="Provider to use: mailtm, guerrillamail"),
+        typer.Option("--provider", help="Provider: tempfastmail, mailtm, guerrillamail"),
     ] = None,
     version: Annotated[
         bool,
@@ -109,8 +111,12 @@ def address(
     ctx: typer.Context,
     provider: Annotated[
         Optional[str],
-        typer.Option("--provider", help="Provider to use: mailtm, guerrillamail"),
+        typer.Option("--provider", help="Provider: tempfastmail, mailtm, guerrillamail"),
     ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Output address as JSON"),
+    ] = False,
 ) -> None:
     """Generate a temp email address and exit."""
     obj = ctx.obj or {}
@@ -124,7 +130,7 @@ def address(
     if obj.get("no_notify"):
         config = replace(config, notifications=False)
 
-    asyncio.run(_run_address(config))
+    asyncio.run(_run_address(config, json_output=json_output))
 
 
 @app.command()
@@ -144,6 +150,46 @@ def resume(
         config = replace(config, notifications=False)
 
     asyncio.run(_run_resume(config, keep))
+
+
+@app.command()
+def providers() -> None:
+    """List available email providers and their status."""
+    from burnbox.providers.utils import build_registry
+
+    config = load_config()
+    registry = build_registry(config.custom_url)
+
+    results = asyncio.run(_check_providers(registry.all()))
+
+    table = Table(title="burnbox providers", border_style="red")
+    table.add_column("Provider", style="bold")
+    table.add_column("Custom URL", style="cyan")
+    table.add_column("Status", style="bold green")
+
+    for p, alive in results:
+        status = "[green]alive[/green]" if alive else "[red]down[/red]"
+        custom = "yes" if p.supports_custom_url else "no"
+        table.add_row(p.name, custom, status)
+
+    console.print(table)
+
+
+async def _check_providers(
+    providers_list: list[Provider],
+) -> list[tuple[Provider, bool]]:
+    results: list[tuple[Provider, bool]] = []
+    for p in providers_list:
+        try:
+            alive = await p.is_alive()
+        except Exception:
+            alive = False
+        results.append((p, alive))
+        try:
+            await p.aclose()
+        except Exception:
+            pass
+    return results
 
 
 if __name__ == "__main__":

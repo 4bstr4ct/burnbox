@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 
 from rich.console import Console
@@ -65,7 +66,7 @@ async def _run(config: AppConfig, keep: bool) -> None:
         await provider.aclose()
 
 
-async def _run_address(config: AppConfig) -> None:
+async def _run_address(config: AppConfig, json_output: bool = False) -> None:
     from burnbox.detectors import async_copy_to_clipboard
 
     provider, unused = await select_provider(config)
@@ -74,12 +75,16 @@ async def _run_address(config: AppConfig) -> None:
 
     try:
         session = await client.register()
-        console.print(f"[green]{session.address}[/green]")
-        if config.copy_address:
-            await async_copy_to_clipboard(session.address)
-            console.print("[dim]Address copied to clipboard.[/dim]")
+        if json_output:
+            print(json.dumps({"address": session.address, "provider": provider.name}))
+        else:
+            console.print(f"[green]{session.address}[/green]")
+            if config.copy_address:
+                await async_copy_to_clipboard(session.address)
+                console.print("[dim]Address copied to clipboard.[/dim]")
     except KeyboardInterrupt:
-        console.print("[dim]Interrupted.[/dim]")
+        if not json_output:
+            console.print("[dim]Interrupted.[/dim]")
     finally:
         if client.session:
             try:

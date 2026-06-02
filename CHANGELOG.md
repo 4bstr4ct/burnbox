@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.3.0 (2026-06-02)
+
+### Added
+- **TempFastMail provider** — new default provider (tempfastmail.com), no auth required, 48h TTL, open source
+- **`burnbox providers`** subcommand — list all providers with alive/down status
+- **`--json` flag** on `burnbox address` — structured output for scripts (`burnbox address --json`)
+
+### Changed
+- **Provider order**: tempfastmail → mail.tm → guerrillamail (tempfastmail is new default)
+- Provider help text updated to include all three providers
+
+### Fixed
+- pyperclip `UnboundLocalError` on systems without display server (use `RuntimeError` parent class)
+
 ## v1.2.4 (2026-06-02)
 
 ### Fix
