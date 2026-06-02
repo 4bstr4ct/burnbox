@@ -4,6 +4,7 @@
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/burnbox)](https://pypi.org/project/burnbox/)
 
 burnbox creates a disposable email address, watches for incoming messages, auto-detects OTP codes, copies them to your clipboard — then burns the account when you're done.
 
@@ -44,8 +45,8 @@ That's it. You'll get a temp address, it auto-copies to clipboard, and burnbox w
 │ reading                       │
 ╰───────────────────────────────╯
 
-  Provider: mailtm
-  Address:  k7x9m2@example.com
+  Provider: tempfastmail
+  Address:  larson.roel.7309@tempfastmail.com
   Address copied to clipboard
 
   Ctrl+C to exit and burn · --keep to preserve · burnbox resume
@@ -58,16 +59,18 @@ That's it. You'll get a temp address, it auto-copies to clipboard, and burnbox w
 | `burnbox` | Create temp email, watch for messages, burn on exit |
 | `burnbox address` | Generate a temp email address and exit (account is burned immediately) |
 | `burnbox resume` | Reconnect to the last saved session |
+| `burnbox providers` | List available providers and their status |
 
 ### Options
 
 ```
---provider       Provider: mailtm, guerrillamail
+--provider       Provider: tempfastmail, mailtm, guerrillamail
 --poll, -p       Polling interval in seconds (default: 5)
 --timeout, -t    HTTP request timeout (default: 10)
 --keep, -k       Keep account alive after exit
 --no-clipboard   Do not copy to clipboard
 --no-notify      Disable desktop notifications
+--json           JSON output (address command only)
 --version, -v    Show version
 --help, -h       Show help
 ```
@@ -86,6 +89,12 @@ burnbox resume
 
 # One-shot: just get a temp address (burned immediately)
 burnbox address
+
+# JSON output for scripts
+burnbox address --json
+
+# Check which providers are available
+burnbox providers
 
 # Headless mode: no clipboard, no notifications
 burnbox --no-clipboard --no-notify
@@ -132,7 +141,7 @@ Config file: `~/.config/burnbox.toml`
 
 ```toml
 [provider]
-default = "mailtm"             # Preferred provider
+default = "tempfastmail"         # Preferred provider
 custom_url = "https://..."     # Custom API URL for mailtm
 
 [polling]
@@ -152,12 +161,16 @@ BURNBOX_PROVIDER=guerrillamail
 BURNBOX_POLL_INTERVAL=3
 BURNBOX_TIMEOUT=15
 BURNBOX_CUSTOM_URL=https://...
+BURNBOX_TEMPFASTMAIL_URL=https://tempfastmail.com
+BURNBOX_MAILTM_URL=https://api.mail.tm
+BURNBOX_GUERRILLA_URL=https://api.guerrillamail.com/ajax.php
 ```
 
 ## Providers
 
 | Provider | Auth | Delete account | Domains | Custom URL |
 |---|---|---|---|---|
+| **tempfastmail** | None | Auto-expire (48h) | tempfastmail.com | Yes |
 | **mail.tm** | Register + token | Yes | Multiple | Yes |
 | **guerrillamail** | Session-based | Best-effort (forget_me) | sharklasers.com, grr.la, etc | No |
 
@@ -225,6 +238,7 @@ After `pip install`, burnbox discovers your provider automatically.
 - OTP codes are auto-cleared from the clipboard after 30 seconds. An atexit handler also clears the clipboard on process termination. Clipboard managers may retain copied text.
 - Notifications show only "Verification code received" — OTP values are never sent to the notification system.
 - Accounts are deleted ("burned") on exit by default. Use `--keep` only if you need persistence.
+- TempFastMail has no account deletion API; emails auto-expire after 48 hours. The session file is deleted locally on exit.
 - GuerrillaMail does not support true account deletion; `forget_me` abandons the session but emails may persist on the server for up to 1 hour.
 
 ## Troubleshooting
