@@ -361,14 +361,13 @@ class TestTempFastMailProvider:
     async def test_is_alive_success(self, mock_async_client):
         resp = MagicMock()
         resp.status_code = 200
-        resp.json.return_value = {"email": "test@tempfastmail.com", "uuid": "abc"}
-        mock_async_client.post = AsyncMock(return_value=resp)
+        mock_async_client.get = AsyncMock(return_value=resp)
         p = TempFastMailProvider(client=mock_async_client)
         assert await p.is_alive() is True
 
     @pytest.mark.asyncio
     async def test_is_alive_failure(self, mock_async_client):
-        mock_async_client.post.side_effect = Exception("connection error")
+        mock_async_client.get.side_effect = Exception("connection error")
         p = TempFastMailProvider(client=mock_async_client)
         assert await p.is_alive() is False
 
@@ -471,6 +470,72 @@ class TestTempFastMailProvider:
         messages = await p.fetch_messages(seen_ids={"msg-old"})
         assert len(messages) == 1
         assert messages[0].id == "msg-new"
+
+    @pytest.mark.asyncio
+    async def test_fetch_messages_plain_text_fallback(self, mock_async_client):
+        list_resp = MagicMock()
+        list_resp.json.return_value = [
+            {
+                "uuid": "msg-plain",
+                "from": "noreply@example.com",
+                "from_name": "Example",
+                "subject": "Verify",
+                "received_at": "2026-06-02T12:00:00+00:00",
+            }
+        ]
+        list_resp.raise_for_status = MagicMock()
+
+        detail_resp = MagicMock()
+        detail_resp.json.return_value = {
+            "uuid": "msg-plain",
+            "from": "noreply@example.com",
+            "from_name": "Example",
+            "subject": "Verify",
+            "html": "",
+            "text": "Your verification code is 5678",
+            "received_at": "2026-06-02T12:00:00+00:00",
+        }
+        detail_resp.raise_for_status = MagicMock()
+
+        mock_async_client.request = AsyncMock(side_effect=[list_resp, detail_resp])
+        p = TempFastMailProvider(client=mock_async_client)
+        p._uuid = "box-uuid-123"
+        messages = await p.fetch_messages(seen_ids=set())
+        assert len(messages) == 1
+        assert "5678" in messages[0].content
+
+    @pytest.mark.asyncio
+    async def test_fetch_messages_no_html_no_text_falls_back_to_subject(self, mock_async_client):
+        list_resp = MagicMock()
+        list_resp.json.return_value = [
+            {
+                "uuid": "msg-empty",
+                "from": "noreply@example.com",
+                "from_name": "Example",
+                "subject": "Important",
+                "received_at": "2026-06-02T12:00:00+00:00",
+            }
+        ]
+        list_resp.raise_for_status = MagicMock()
+
+        detail_resp = MagicMock()
+        detail_resp.json.return_value = {
+            "uuid": "msg-empty",
+            "from": "noreply@example.com",
+            "from_name": "Example",
+            "subject": "Important",
+            "html": "",
+            "text": "",
+            "received_at": "2026-06-02T12:00:00+00:00",
+        }
+        detail_resp.raise_for_status = MagicMock()
+
+        mock_async_client.request = AsyncMock(side_effect=[list_resp, detail_resp])
+        p = TempFastMailProvider(client=mock_async_client)
+        p._uuid = "box-uuid-123"
+        messages = await p.fetch_messages(seen_ids=set())
+        assert len(messages) == 1
+        assert messages[0].content == "Important"
 
     @pytest.mark.asyncio
     async def test_fetch_messages_not_registered(self, mock_async_client):

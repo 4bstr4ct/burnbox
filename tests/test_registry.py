@@ -1,5 +1,6 @@
 from burnbox.models import Session
 from burnbox.providers.registry import ProviderRegistry, select_provider
+from burnbox.providers.utils import build_registry
 import pytest
 
 
@@ -116,3 +117,28 @@ class TestSelectProvider:
     async def test_empty_list(self):
         result = await select_provider([])
         assert result is None
+
+
+class TestBuildRegistry:
+    def test_default_providers(self):
+        registry = build_registry()
+        names = registry.list_names()
+        assert "tempfastmail" in names
+        assert "mailtm" in names
+        assert "guerrillamail" in names
+
+    def test_tempfastmail_is_first(self):
+        registry = build_registry()
+        assert registry.list_names()[0] == "tempfastmail"
+
+    def test_custom_url_wired_to_tempfastmail(self):
+        registry = build_registry(custom_url="https://example.com")
+        tfm = registry.get("tempfastmail")
+        assert tfm is not None
+        assert tfm._base_url == "https://example.com"
+
+    def test_custom_url_wired_to_mailtm(self):
+        registry = build_registry(custom_url="https://example.com")
+        mtm = registry.get("mailtm")
+        assert mtm is not None
+        assert mtm._base_url == "https://example.com"

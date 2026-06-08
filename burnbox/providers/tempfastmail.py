@@ -17,9 +17,7 @@ from burnbox.retry import RetryConfig, raise_for_status, retry
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_BASE_URL = os.environ.get(
-    "BURNBOX_TEMPFASTMAIL_URL", "https://tempfastmail.com"
-)
+_DEFAULT_BASE_URL = os.environ.get("BURNBOX_TEMPFASTMAIL_URL", "https://tempfastmail.com")
 _RETRY_CFG = RetryConfig()
 _FETCH_CONCURRENCY = 5
 
@@ -68,14 +66,8 @@ class TempFastMailProvider:
 
     async def is_alive(self) -> bool:
         try:
-            response = await self._client.post(
-                f"{self._base_url}/api/email-box", json={}
-            )
-            if response.status_code in (200, 201):
-                data = response.json()
-                if isinstance(data, dict) and "email" in data:
-                    return True
-            return False
+            response = await self._client.get(f"{self._base_url}/")
+            return response.status_code == 200
         except Exception:
             return False
 
@@ -103,15 +95,12 @@ class TempFastMailProvider:
         if not self._uuid:
             raise ProviderError("TempFastMail: not registered or restored")
         box_uuid = self._uuid
-        data = await self._request(
-            "GET", f"/api/email-box/{safe_path_segment(box_uuid)}/emails"
-        )
+        data = await self._request("GET", f"/api/email-box/{safe_path_segment(box_uuid)}/emails")
         if not isinstance(data, list):
             raise ProviderError("TempFastMail: expected list of emails")
 
         to_fetch = [
-            m for m in data
-            if isinstance(m, dict) and m.get("uuid") and m["uuid"] not in seen_ids
+            m for m in data if isinstance(m, dict) and m.get("uuid") and m["uuid"] not in seen_ids
         ]
 
         sem = asyncio.Semaphore(_FETCH_CONCURRENCY)
@@ -127,10 +116,11 @@ class TempFastMailProvider:
             if not isinstance(full, dict):
                 raise ProviderError("TempFastMail: expected email object")
             html_body = full.get("html") or ""
+            text_body = full.get("text") or ""
             if html_body.strip():
-                content = _html.unescape(
-                    self._html_parser.handle(html_body).strip()
-                )
+                content = _html.unescape(self._html_parser.handle(html_body).strip())
+            elif text_body.strip():
+                content = text_body.strip()
             else:
                 content = item.get("subject", "[Empty Message]")
             return InboxMessage(
@@ -140,9 +130,7 @@ class TempFastMailProvider:
                 content=content,
             )
 
-        results = await asyncio.gather(
-            *[_fetch_one(m) for m in to_fetch], return_exceptions=True
-        )
+        results = await asyncio.gather(*[_fetch_one(m) for m in to_fetch], return_exceptions=True)
         messages: list[InboxMessage] = []
         for m, r in zip(to_fetch, results):
             if isinstance(r, InboxMessage):
@@ -152,7 +140,5 @@ class TempFastMailProvider:
         return messages
 
     async def delete_account(self, account_id: str) -> bool:
-        logger.debug(
-            "TempFastMail: no delete API; emails auto-expire in 48h"
-        )
+        logger.debug("TempFastMail: no delete API; emails auto-expire in 48h")
         return True

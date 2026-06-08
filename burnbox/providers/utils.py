@@ -38,11 +38,12 @@ def build_registry(custom_url: str | None = None) -> ProviderRegistry:
     from burnbox.security import validate_url
 
     registry = ProviderRegistry()
-    registry.register(TempFastMailProvider())
     if custom_url:
         validated = validate_url(custom_url, label="custom_url")
+        registry.register(TempFastMailProvider(base_url=validated))
         registry.register(MailTmProvider(base_url=validated))
     else:
+        registry.register(TempFastMailProvider())
         registry.register(MailTmProvider())
     registry.register(GuerrillaMailProvider())
     registry.discover_plugins()

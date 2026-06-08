@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.3.1 (2026-06-08)
+
+### Fixed
+- **TempFastMail `is_alive()` resource leak** — was creating a real mailbox on every call (POST); now uses `GET /` (read-only, no side-effect)
+- **Plain-text email content lost** — when no `html` field, content fell back to subject string; now uses `text` field first, then subject as last resort
+- **`custom_url` not wired to TempFastMail** — `build_registry(custom_url=...)` only passed custom URL to MailTmProvider; now both TempFastMailProvider and MailTmProvider receive it
+
 ## v1.3.0 (2026-06-02)
 
 ### Added
